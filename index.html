@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1108">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Boundaries">
+<title>Bohn Ag Boundaries</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- Projects -->
+<section id="screen-projects" class="screen">
+  <header class="proj-head">
+    <div class="logo">Bohn<br>Ag</div>
+    <div>
+      <h1>Boundaries</h1>
+      <p class="muted">Fields, sloughs &amp; shapefiles</p>
+    </div>
+  </header>
+  <div class="big-actions">
+    <button type="button" class="big-btn" id="btn-new-project"><span class="ico" data-icon="plus"></span>New project</button>
+    <label class="big-btn" for="import-input"><span class="ico" data-icon="download"></span>Import file</label>
+    <input type="file" id="import-input" accept=".zip,.kml,.geojson,.json" hidden>
+  </div>
+  <div class="proj-panel">
+    <div class="row-between"><h2>Projects</h2><span class="muted small" id="proj-count"></span></div>
+    <div id="project-list" class="project-list"></div>
+    <p class="muted small center" id="proj-empty">No projects yet. Start one, or import a shapefile, KML or GeoJSON.</p>
+  </div>
+</section>
+
+<!-- Map -->
+<section id="screen-map" class="screen hidden">
+  <div id="map"></div>
+
+  <div class="rail" id="rail">
+    <button type="button" class="glass logo-btn" id="btn-home" aria-label="Back to projects">Bohn<br>Ag</button>
+    <button type="button" class="glass sq" id="btn-locate" aria-label="Center on my location"><span class="ico" data-icon="nav"></span></button>
+    <button type="button" class="glass sq" id="btn-layers" aria-label="Change map layer"><span class="ico" data-icon="layers"></span></button>
+    <button type="button" class="glass sq edit-only" id="btn-list" aria-label="Boundary list"><span class="ico" data-icon="list"></span></button>
+    <button type="button" class="glass sq edit-only" id="btn-undo" aria-label="Undo"><span class="ico" data-icon="undo"></span></button>
+    <button type="button" class="glass sq gps-btn edit-only" id="btn-drive" aria-label="Drive a boundary with GPS"><span class="rec-dot"></span><span class="tiny">GPS</span></button>
+  </div>
+
+  <div class="area-chip glass edit-only" id="area-chip">
+    <div class="chip-label" id="chip-label"></div>
+    <div class="chip-big" id="chip-net"></div>
+    <div class="chip-sub" id="chip-sub"></div>
+  </div>
+
+  <div class="layer-label glass" id="layer-label" hidden></div>
+
+  <div class="bottom-stack edit-only" id="edit-bottom">
+    <div class="hint" id="hint"></div>
+    <div class="draw-bar" id="draw-bar" hidden>
+      <button type="button" class="pill" id="draw-undo">Undo point</button>
+      <button type="button" class="pill" id="draw-cancel">Cancel</button>
+      <button type="button" class="pill primary" id="draw-done">Done</button>
+    </div>
+    <nav class="toolbar glass" id="toolbar" aria-label="Edit tools">
+      <button type="button" data-tool="boundary"><span class="ico" data-icon="poly"></span>Boundary</button>
+      <button type="button" data-tool="move"><span class="ico" data-icon="move"></span>Move</button>
+      <button type="button" data-tool="add"><span class="ico" data-icon="addpt"></span>Add pt</button>
+      <button type="button" data-tool="remove"><span class="ico" data-icon="rmpt"></span>Remove</button>
+      <button type="button" data-tool="slough"><span class="ico slough-c" data-icon="drop"></span>Slough</button>
+      <button type="button" data-tool="split"><span class="ico" data-icon="split"></span>Split</button>
+    </nav>
+  </div>
+
+  <!-- Drive mode overlays -->
+  <div class="drive-stats glass drive-only" id="drive-stats">
+    <div class="rec-row"><span class="rec-dot" id="rec-dot"></span><span id="drive-title">Recording</span></div>
+    <div class="stat-grid">
+      <div><span class="lbl">Speed</span><span class="val" id="st-speed">–</span></div>
+      <div><span class="lbl">GPS fixes</span><span class="val" id="st-rate">–</span></div>
+      <div><span class="lbl">Accuracy</span><span class="val" id="st-acc">–</span></div>
+    </div>
+  </div>
+  <div class="bottom-stack drive-only" id="drive-bottom">
+    <div class="offset-panel" id="offset-panel">
+      <div class="row-between">
+        <strong>Boundary offset</strong>
+        <div class="legend"><span><i class="lg gps"></i>GPS points</span><span><i class="lg bnd"></i>Smoothed</span></div>
+      </div>
+      <div class="offset-row">
+        <div class="stepper">
+          <button type="button" id="off-minus" aria-label="Decrease offset">−</button>
+          <div class="step-val"><span id="off-val">0</span> ft</div>
+          <button type="button" id="off-plus" aria-label="Increase offset">+</button>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Boundary side" id="side-seg">
+          <button type="button" role="radio" data-side="left">Left</button>
+          <button type="button" role="radio" data-side="off">Off</button>
+          <button type="button" role="radio" data-side="right">Right</button>
+        </div>
+      </div>
+      <p class="muted small" id="offset-note">Measured from the GPS antenna. The smoothed boundary trails a couple of fixes behind the truck.</p>
+    </div>
+    <nav class="toolbar glass" aria-label="Drive controls">
+      <button type="button" id="drv-pause"><span class="ico" data-icon="pause"></span><span id="drv-pause-lbl">Pause</span></button>
+      <button type="button" id="drv-offset"><span class="ico" data-icon="offset"></span>Offset</button>
+      <button type="button" id="drv-follow" class="on"><span class="ico" data-icon="nav"></span>Follow</button>
+      <button type="button" id="drv-cancel"><span class="ico" data-icon="x"></span>Discard</button>
+      <button type="button" id="drv-finish"><span class="ico accent-c" data-icon="check"></span>Finish</button>
+    </nav>
+  </div>
+</section>
+
+<!-- Sheets -->
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="sheet" id="sheet-project" hidden role="dialog" aria-labelledby="sp-title">
+  <div class="grab"></div>
+  <h2 id="sp-title">New project</h2>
+  <form id="form-project" class="form">
+    <label class="field-row"><span>Field name</span><input name="name" required maxlength="50" placeholder="e.g. Home Quarter" autocomplete="off"></label>
+    <label class="field-row"><span>Year</span><input name="year" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
+    <div class="btn-row">
+      <button type="button" class="pill" data-close>Cancel</button>
+      <button type="submit" class="pill primary" id="sp-submit">Create</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet" id="sheet-actions" hidden role="dialog" aria-labelledby="sa-title">
+  <div class="grab"></div>
+  <h2 id="sa-title"></h2>
+  <div class="action-list">
+    <button type="button" class="action" data-act="edit">Rename / change year</button>
+    <button type="button" class="action" data-act="dup">Duplicate</button>
+    <button type="button" class="action danger" data-act="delete">Delete project</button>
+    <button type="button" class="action" data-close>Cancel</button>
+  </div>
+</div>
+
+<div class="sheet tall" id="sheet-boundaries" hidden role="dialog" aria-labelledby="sb-title">
+  <div class="grab"></div>
+  <div class="row-between">
+    <div><h2 id="sb-title"></h2><p class="muted small" id="sb-sub"></p></div>
+    <button type="button" class="pill" id="sb-edit">Edit</button>
+  </div>
+  <div id="sb-list" class="b-list"></div>
+  <div class="tiles">
+    <div class="tile"><span class="lbl">Gross</span><span class="val" id="t-gross"></span></div>
+    <div class="tile"><span class="lbl">Sloughs</span><span class="val slough-t" id="t-slough"></span></div>
+    <div class="tile hi"><span class="lbl">Net farmable</span><span class="val" id="t-net"></span></div>
+  </div>
+  <p class="muted small">Tap a row to show it on the map. Tap ⋯ to rename, change type or delete. All areas in acres.</p>
+  <div class="btn-grid">
+    <button type="button" class="pill" id="sb-add-field">+ Draw field</button>
+    <button type="button" class="pill" id="sb-add-slough">+ Draw slough</button>
+    <button type="button" class="pill" id="sb-drive">Drive with GPS</button>
+    <button type="button" class="pill primary" id="sb-export">Export</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-bedit" hidden role="dialog" aria-labelledby="be-title">
+  <div class="grab"></div>
+  <h2 id="be-title">Boundary</h2>
+  <form id="form-bedit" class="form">
+    <label class="field-row"><span>Name</span><input name="name" required maxlength="40" autocomplete="off"></label>
+    <div class="field-row"><span>Type</span>
+      <div class="seg" role="radiogroup" aria-label="Boundary type" id="be-type">
+        <button type="button" role="radio" data-val="field">Field</button>
+        <button type="button" role="radio" data-val="slough">Slough</button>
+      </div>
+    </div>
+    <div id="be-drive" hidden>
+      <div class="field-row"><span>Offset</span>
+        <div class="stepper small">
+          <button type="button" id="be-off-minus" aria-label="Decrease offset">−</button>
+          <div class="step-val"><span id="be-off-val">0</span> ft</div>
+          <button type="button" id="be-off-plus" aria-label="Increase offset">+</button>
+        </div>
+      </div>
+      <div class="field-row"><span>Side</span>
+        <div class="seg" role="radiogroup" aria-label="Offset side" id="be-side">
+          <button type="button" role="radio" data-val="left">Left</button>
+          <button type="button" role="radio" data-val="off">Off</button>
+          <button type="button" role="radio" data-val="right">Right</button>
+        </div>
+      </div>
+      <p class="muted small">Recorded from <span id="be-fixes"></span> GPS fixes. Changing the offset redraws this boundary from them (point edits are replaced).</p>
+    </div>
+    <div class="btn-row">
+      <button type="button" class="pill danger" id="be-delete">Delete</button>
+      <button type="button" class="pill" data-close>Cancel</button>
+      <button type="submit" class="pill primary">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet" id="sheet-drive" hidden role="dialog" aria-labelledby="sd-title">
+  <div class="grab"></div>
+  <h2 id="sd-title">Drive with GPS</h2>
+  <form id="form-drive" class="form">
+    <div class="field-row"><span>Recording</span>
+      <div class="seg" role="radiogroup" aria-label="Boundary type" id="sd-type">
+        <button type="button" role="radio" data-val="field">Field</button>
+        <button type="button" role="radio" data-val="slough">Slough</button>
+      </div>
+    </div>
+    <label class="field-row"><span>Name</span><input name="name" required maxlength="40" autocomplete="off"></label>
+    <div class="field-row"><span>Offset</span>
+      <div class="stepper small">
+        <button type="button" id="sd-off-minus" aria-label="Decrease offset">−</button>
+        <div class="step-val"><span id="sd-off-val">0</span> ft</div>
+        <button type="button" id="sd-off-plus" aria-label="Increase offset">+</button>
+      </div>
+    </div>
+    <div class="field-row"><span>Boundary side</span>
+      <div class="seg" role="radiogroup" aria-label="Boundary side" id="sd-side">
+        <button type="button" role="radio" data-val="left">Left</button>
+        <button type="button" role="radio" data-val="off">Off</button>
+        <button type="button" role="radio" data-val="right">Right</button>
+      </div>
+    </div>
+    <p class="muted small">Side is relative to your direction of travel. Driving clockwise around a field, the edge is on your left. Keep the screen on; the phone records about one fix per second.</p>
+    <div class="btn-row">
+      <button type="button" class="pill" data-close>Cancel</button>
+      <button type="submit" class="pill primary">Start recording</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet tall" id="sheet-export" hidden role="dialog" aria-labelledby="se-title">
+  <div class="grab"></div>
+  <h2 id="se-title">Export</h2>
+  <form id="form-export" class="form">
+    <div class="sec-lbl">Format</div>
+    <div class="fmt-grid" role="radiogroup" aria-label="Export format" id="se-format">
+      <button type="button" role="radio" data-val="shp">Shapefile<small>.zip</small></button>
+      <button type="button" role="radio" data-val="kml">KML<small>Google Earth</small></button>
+      <button type="button" role="radio" data-val="geojson">GeoJSON<small>web / GIS</small></button>
+    </div>
+    <div class="sec-lbl">What to include</div>
+    <div class="card-list">
+      <label class="check-row"><input type="radio" name="mode" value="cutout" checked><span>Field with sloughs cut out</span><small id="se-n-cut"></small></label>
+      <label class="check-row"><input type="radio" name="mode" value="separate"><span>Field and sloughs as separate shapes</span><small id="se-n-sep"></small></label>
+      <label class="check-row" id="se-points-row"><input type="checkbox" name="points" checked><span>Also export corner points layer</span></label>
+    </div>
+    <div class="sec-lbl">Attributes &amp; projection</div>
+    <div class="card-list">
+      <label class="field-row"><span>Field name</span><input name="name" required maxlength="50"></label>
+      <label class="field-row"><span>Year</span><input name="year" inputmode="numeric" maxlength="4" required></label>
+      <label class="field-row" id="se-proj-row"><span>Projection</span>
+        <select name="projection" id="se-proj"></select>
+      </label>
+    </div>
+    <p class="muted small">Each shape gets NAME, PART, YEAR, TYPE and ACRES attributes.</p>
+    <div class="file-note" id="se-file"></div>
+    <div class="btn-row">
+      <button type="button" class="pill" data-close>Cancel</button>
+      <button type="submit" class="pill primary">Save or share</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
