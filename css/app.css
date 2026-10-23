@@ -21,8 +21,7 @@
   --gps: #4da3ff;
   --danger: #ff7a6b;
   --warn: #f5a524;
-  --map-blank: #0e0f0c;
-  --map-grid: rgba(255, 255, 255, 0.05);
+  --map-blank: #000;
   --proj-glow: #23271a;
   color-scheme: dark;
 }
@@ -44,8 +43,6 @@
   --slough-text: #1f7fa8;
   --danger: #c8372a;
   --warn: #b45309;
-  --map-blank: #f6f7f3;
-  --map-grid: rgba(0, 0, 0, 0.06);
   --proj-glow: #ffffff;
   color-scheme: light;
 }
@@ -98,10 +95,6 @@ h2 { font-size: 19px; font-weight: 800; }
 
 /* ---------- map ---------- */
 #map { position: absolute; inset: 0; background: var(--map-blank); }
-.blank-tile { box-shadow: inset -1px -1px 0 var(--map-grid); }
-/* With layer None by day, darker strokes so the lines read on the light background. */
-:root[data-theme="light"] #screen-map.layer-none .bnd-field { stroke: #a8860a; fill: #e6be1e; }
-:root[data-theme="light"] #screen-map.layer-none .bnd-slough { stroke: #1c7aa3; fill: #8fd3ee; }
 .leaflet-container { font: inherit; }
 .leaflet-control-attribution { background: rgba(10, 11, 6, 0.6) !important; color: #aaa !important; font-size: 10px !important; }
 .leaflet-control-attribution a { color: #ddd !important; }
@@ -128,12 +121,13 @@ h2 { font-size: 19px; font-weight: 800; }
 .layer-tiles { display: flex; gap: 16px; }
 .layer-tiles button { width: 84px; background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--text); }
 .lthumb { width: 72px; height: 56px; border-radius: 10px; border: 1px solid var(--line-2); background: #556b3a center / cover no-repeat; display: block; overflow: hidden; }
-.lthumb.blank { background-color: var(--map-blank); background-image: linear-gradient(var(--map-grid) 1px, transparent 1px), linear-gradient(90deg, var(--map-grid) 1px, transparent 1px); background-size: 14px 14px; }
-.lthumb svg { width: 100%; height: 100%; display: block; }
+.lthumb.blank { background: #000; }
 .layer-tiles button[aria-checked="true"] .lthumb { border-color: var(--sel); box-shadow: 0 0 0 2px var(--sel); }
 .layer-tiles button[aria-checked="true"] .lname { color: var(--sel); font-weight: 700; }
 .set-row { display: flex; align-items: center; gap: 12px; }
 .set-row > span { width: 64px; font-weight: 700; flex: none; }
+.set-row.top { align-items: flex-start; padding-top: 10px; border-top: 1px solid var(--line); }
+.set-row.top > span { padding-top: 18px; }
 
 .bottom-stack { position: absolute; z-index: 800; left: calc(var(--safe-l) + 12px); right: calc(var(--safe-r) + 12px); bottom: calc(var(--safe-b) + 14px); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .bottom-stack > * { pointer-events: auto; }

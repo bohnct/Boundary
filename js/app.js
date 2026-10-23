@@ -17,7 +17,6 @@ const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   nav: '<path d="M21 3 3 10.5l7.5 3L14 21z"/>',
-  layers: '<path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/>',
   rec: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5" fill="#ef4444" stroke="none"/>',
@@ -251,13 +250,10 @@ const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imag
 const satLayer = L.tileLayer(SAT_URL, { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' });
 
 const map = L.map('map', { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, preferCanvas: false }).setView([50.45, -104.6], 13);
-// Layer None: plain background (CSS --map-blank) with a faint grid that pans with the map.
-const BlankGrid = L.GridLayer.extend({ createTile() { const d = document.createElement('div'); d.className = 'blank-tile'; return d; } });
-const gridLayer = new BlankGrid({ tileSize: 128, maxZoom: 21 });
+// Layer None is just the plain black map background (#map in CSS).
 function setLayer(name) {
   S.prefs.layer = name;
-  if (name === 'satellite') { gridLayer.remove(); satLayer.addTo(map); } else { satLayer.remove(); gridLayer.addTo(map); }
-  $('#screen-map').classList.toggle('layer-none', name === 'none');
+  if (name === 'satellite') satLayer.addTo(map); else satLayer.remove();
   setSeg('#layer-seg', name);
   savePrefs();
 }
@@ -271,20 +267,17 @@ let meMarker = null;
 
 map.on('moveend', () => { S.prefs.lastView = { c: map.getCenter(), z: map.getZoom() }; savePrefs(); });
 
-// ---------- top panels (layers, view settings) ----------
-let openPanel = null; // 'layers' | 'view' | null
+// ---------- view panel (eye button: theme + map layer) ----------
+let openPanel = null; // 'view' | null
 function togglePanel(name) {
   openPanel = openPanel === name ? null : name;
-  for (const [n, panel, btn] of [['layers', '#panel-layers', '#btn-layers'], ['view', '#panel-view', '#btn-view']]) {
-    $(panel).hidden = openPanel !== n;
-    $(btn).classList.toggle('open', openPanel === n);
-    $(btn).setAttribute('aria-expanded', String(openPanel === n));
-  }
+  $('#panel-view').hidden = !openPanel;
+  $('#btn-view').classList.toggle('open', !!openPanel);
+  $('#btn-view').setAttribute('aria-expanded', String(!!openPanel));
   $('#screen-map').classList.toggle('panel-open', !!openPanel);
-  if (openPanel === 'layers') updateSatThumb();
+  if (openPanel) updateSatThumb();
 }
 const closePanel = () => { if (openPanel) togglePanel(openPanel); };
-$('#btn-layers').addEventListener('click', () => togglePanel('layers'));
 $('#btn-view').addEventListener('click', () => togglePanel('view'));
 wireSeg('#layer-seg', setLayer);
 
@@ -699,6 +692,7 @@ $('#btn-drive').addEventListener('click', () => openDriveSetup());
 function openDriveSetup() {
   if (!geo) return toast('GPS is not available on this device');
   cancelDraw();
+  closePanel();
   const f = $('#form-drive');
   const nF = S.current.boundaries.filter((b) => b.type === 'field').length;
   setSeg('#sd-type', 'field');
@@ -737,7 +731,9 @@ function startDrive(state) {
   $('#drive-title').textContent = `${S.current.name} ${S.current.year} · ${state.name}`;
   $('#off-val').textContent = state.offsetFt;
   setSeg('#side-seg', state.side);
-  $('#offset-panel').hidden = false;
+  // Offset was just set in the drive sheet; the Offset button brings the panel back if needed.
+  $('#offset-panel').hidden = true;
+  $('#drv-offset').classList.remove('on');
   D.raw = L.polyline([], { color: '#4da3ff', weight: 2.5, interactive: false, renderer: canvas }).addTo(gDrive);
   D.dots = L.layerGroup().addTo(gDrive);
   D.frozen = L.layerGroup().addTo(gDrive);

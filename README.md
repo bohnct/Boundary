@@ -5,7 +5,7 @@ A phone web app (PWA) for drawing or driving field boundaries and obstacles (slo
 ## What it does
 
 - **Projects** — one per field and crop year (field name + year). Saved on the device.
-- **Rail buttons** (left): projects, locate, view settings (eye: Day / Night / Auto theme), map layer (Satellite or None — plain white by day, black at night), edit, record. Tap the acres card (top right) for the field data list.
+- **Rail buttons** (left): projects, locate, view settings (eye: Day / Night / Auto theme and map layer: Satellite or None — plain black), edit, record. Tap the acres card (top right) for the field data list.
 - **Map editor** — tap the pencil to show the tools along the bottom:
   - **Boundary** / **Obstacle**: tap corners, then Done.
   - **Move**: tap a boundary, drag its white points.
