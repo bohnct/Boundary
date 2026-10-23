@@ -6,7 +6,9 @@
 <meta name="theme-color" content="#0f1108">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Solid status bar: with black-translucent, iOS 18 home-screen apps draw under the status bar but are
+     sized 59 pt short, leaving a black strip at the bottom that nothing can draw into. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Boundaries">
 <title>Bohn Ag Boundaries</title>
 <link rel="manifest" href="manifest.webmanifest">
