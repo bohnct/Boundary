@@ -226,14 +226,17 @@ $('#import-input').addEventListener('change', async (e) => {
 });
 
 // ---------- map ----------
+// crossOrigin makes tile responses readable (not opaque), so the service worker
+// caches their real size instead of a padded one that eats the storage quota.
+const TILE_OPTS = { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true };
 const LAYERS = [
-  { name: 'Satellite', make: () => [L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19, maxZoom: 21, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' })] },
+  { name: 'Satellite', make: () => [L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...TILE_OPTS, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' })] },
   { name: 'Satellite + roads', make: () => [
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19, maxZoom: 21, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19, maxZoom: 21 }),
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19, maxZoom: 21 }),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...TILE_OPTS, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', TILE_OPTS),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', TILE_OPTS),
   ] },
-  { name: 'Street map', make: () => [L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: '© OpenStreetMap contributors' })] },
+  { name: 'Street map', make: () => [L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...TILE_OPTS, attribution: '© OpenStreetMap contributors' })] },
 ];
 
 const map = L.map('map', { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, preferCanvas: false }).setView([50.45, -104.6], 13);
@@ -369,7 +372,7 @@ function vxIcon(cls) { return L.divIcon({ className: `vx ${cls}`, html: '<i></i>
 function renderEditHandles() {
   gEdit.clearLayers();
   const b = selected();
-  if (!b || S.draw || S.split) return;
+  if (!b || S.draw || S.split || S.drive) return;
   const poly = shapeLayers.get(b.id);
   // Only show handles at least ~20 px apart at this zoom; zoom in to reach the rest.
   const shown = new Set();
@@ -465,6 +468,7 @@ function updateHint() {
 }
 
 function onShapeTap(b, latlng) {
+  if (S.drive) return;
   if (S.draw) return onMapTap(latlng);
   if (S.tool === 'split') {
     if (S.split) return onMapTap(latlng);
@@ -772,7 +776,12 @@ async function requestWakeLock() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.drive) requestWakeLock();
-  if (document.visibilityState === 'hidden' && S.drive) persistDrive(true);
+  if (document.visibilityState === 'hidden') {
+    if (S.drive) persistDrive(true);
+    // Write any pending edit now; iOS may kill the app before the debounce fires.
+    clearTimeout(saveTimer);
+    store(STORE_KEY, S.projects);
+  }
 });
 
 function stopDrive() {
@@ -782,6 +791,9 @@ function stopDrive() {
   D.wakeLock = null;
   gDrive.clearLayers();
   D.truck = null;
+  D.lastPos = null;
+  D._times = [];
+  D._lastHeading = null;
   S.drive = null;
   try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ }
   $('#screen-map').classList.remove('driving');
@@ -889,6 +901,8 @@ if (pendingDrive && S.projects.some((p) => p.id === pendingDrive.projectId)) {
   if (confirm(`Resume the GPS drive in progress (${pendingDrive.fixes.length} points recorded)?`)) startDrive(pendingDrive);
   else { try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ } }
 } else {
+  // A saved drive whose project was deleted can never be resumed.
+  if (pendingDrive) { try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ } }
   showProjects();
 }
 navigator.storage?.persist?.();

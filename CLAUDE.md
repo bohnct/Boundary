@@ -29,7 +29,8 @@ First working version done and tested (see README). The owner has UI changes in 
 ## Working on it
 
 - Run: `python3 -m http.server 8000` in this folder, open http://localhost:8000. Add `?sim` (or `?sim=fast`) to replay a simulated 40 km/h, 1 Hz drive around wherever the map is centred.
-- Tests: `node tests/geo.test.js` (acres vs a quarter section, smoothing at 20/40/60 km/h, split, UTM, shapefile round-trip). Keep them passing.
+- On the owner's Windows laptop it's `py -m http.server 8000` (`.claude/launch.json` has it). Node is not installed there.
+- Tests: `node tests/geo.test.js` (acres vs a quarter section, smoothing at 20/40/60 km/h, split, UTM, shapefile round-trip). Keep them passing. Without Node, run them in a browser on the local server: `await import('/tests/geo.test.js')` in the console prints the same PASS/FAIL lines.
 - Area math is ellipsoidal (WGS84); verified against pyproj Geod to 0.001 ac. Don't swap in a spherical formula — it was 0.2% off.
 - Bump `VERSION` in `sw.js` when shipping changes so installed phones pick them up.
 - Data is in localStorage keys `bab.projects.v1`, `bab.drive.v1`, `bab.prefs.v1`. Don't change the shape without a migration.

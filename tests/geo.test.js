@@ -1,5 +1,8 @@
 // Run: node tests/geo.test.js  (writes test output files to tests/out/)
-import { writeFileSync, mkdirSync } from 'node:fs';
+// Also runs in a browser (import it from a page served from this folder); files are skipped there.
+const fs = typeof process !== 'undefined' && process.versions?.node ? await import('node:fs') : null;
+fs?.mkdirSync('tests/out', { recursive: true });
+const writeFileSync = (path, data) => fs?.writeFileSync(path, data);
 import { makeProjector, acres, buildBoundary, splitRing, toUTM, fromUTM } from '../js/geo.js';
 import { buildShapefileZip, buildGeoJson, buildKml, computeAreas } from '../js/formats.js';
 import { readZip } from '../js/zip.js';
@@ -82,7 +85,6 @@ for (const kmh of [20, 40, 60]) {
 }
 
 // Export a project with a slough hole
-mkdirSync('tests/out', { recursive: true });
 const slough = [[200, 200], [200, 300], [300, 300], [300, 200]].map(P.toLL); // 1 ha
 const project = { id: 't', name: 'Home Quarter', year: 2026, boundaries: [
   { id: 'f', name: 'Field', type: 'field', ring: square },
@@ -102,4 +104,4 @@ for (const [mode, kind] of [['cutout', 'wgs84'], ['separate', 'utm']]) {
 writeFileSync('tests/out/project.geojson', buildGeoJson(project, 'cutout').data);
 writeFileSync('tests/out/project.kml', buildKml(project, 'cutout').data);
 console.log(fails ? `${fails} FAILED` : 'all passed');
-process.exitCode = fails ? 1 : 0;
+if (fs) process.exitCode = fails ? 1 : 0;
