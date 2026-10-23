@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="css/app.css?v=14"><!-- ?v= keeps page, styles and script from the same version; bump with APP_VERSION -->
+<link rel="stylesheet" href="css/app.css?v=15"><!-- ?v= keeps page, styles and script from the same version; bump with APP_VERSION -->
 <script>/* home-screen app? */ if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) document.documentElement.classList.add('standalone');</script>
 <script>/* set the theme before first paint */ try { var t = (JSON.parse(localStorage.getItem('bab.prefs.v1')) || {}).theme || 'night'; document.documentElement.dataset.theme = t === 'day' || (t === 'auto' && !matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark'; } catch (e) { document.documentElement.dataset.theme = 'dark'; }</script>
 </head>
@@ -92,7 +92,7 @@
       <button type="button" data-tool="move"><span class="ico" data-icon="move"></span>Move</button>
       <button type="button" data-tool="add"><span class="ico" data-icon="addpt"></span>Add pt</button>
       <button type="button" data-tool="remove"><span class="ico" data-icon="rmpt"></span>Remove</button>
-      <button type="button" data-tool="slough"><span class="ico slough-c" data-icon="obstacle"></span>Obstacle</button>
+      <button type="button" data-tool="slough"><span class="ico" data-icon="obstacle"></span>Obstacle</button>
       <button type="button" data-tool="split"><span class="ico" data-icon="split"></span>Split</button>
     </nav>
   </div>
@@ -110,25 +110,9 @@
     </div>
   </div>
   <div class="bottom-stack drive-only" id="drive-bottom">
-    <div class="offset-panel" id="offset-panel">
-      <strong>Boundary offset</strong>
-      <div class="offset-row">
-        <div class="stepper">
-          <button type="button" id="off-minus" aria-label="Decrease offset">−</button>
-          <div class="step-val"><span id="off-val">0</span> ft</div>
-          <button type="button" id="off-plus" aria-label="Increase offset">+</button>
-        </div>
-        <div class="seg" role="radiogroup" aria-label="Boundary side" id="side-seg">
-          <button type="button" role="radio" data-side="left">Left</button>
-          <button type="button" role="radio" data-side="off">Off</button>
-          <button type="button" role="radio" data-side="right">Right</button>
-        </div>
-      </div>
-    </div>
     <nav class="toolbar glass" aria-label="Drive controls">
       <button type="button" id="drv-pause"><span class="ico" data-icon="pause"></span><span id="drv-pause-lbl">Pause</span></button>
-      <button type="button" id="drv-offset"><span class="ico" data-icon="offset"></span>Offset</button>
-      <button type="button" id="drv-follow" class="on"><span class="ico" data-icon="nav"></span>Follow</button>
+      <button type="button" id="drv-camera" class="on"><span class="ico" data-icon="fit"></span><span id="drv-camera-lbl">Fit</span></button>
       <button type="button" id="drv-cancel"><span class="ico" data-icon="x"></span>Discard</button>
       <button type="button" id="drv-finish"><span class="ico accent-c" data-icon="check"></span>Finish</button>
     </nav>
@@ -281,6 +265,6 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script type="module" src="js/app.js?v=14"></script>
+<script type="module" src="js/app.js?v=15"></script>
 </body>
 </html>

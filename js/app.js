@@ -8,7 +8,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
 // Shown on the Projects screen so you can tell an updated copy has loaded.
 // Keep in step with VERSION in sw.js (bump both when shipping).
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -29,13 +29,13 @@ const ICONS = {
   // Add / remove point: a corner on an edge, with the + or − lifted clear to the top right.
   addpt: '<path d="M3 20 14 11.75"/><circle cx="8.5" cy="15.9" r="2.6" fill="currentColor"/><path d="M18.5 2.5v6M15.5 5.5h6"/>',
   rmpt: '<path d="M3 20 14 11.75"/><circle cx="8.5" cy="15.9" r="2.6" fill="currentColor"/><path d="M15.5 5.5h6"/>',
-  // Obstacle: a field with an irregular area cut out of it.
-  obstacle: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8.5 8.2c1.3-1.4 3.2-.6 4.4-1 1.6-.5 3.3.4 3.4 2.1.1 1.3-.9 2-.6 3.2.4 1.5-.5 3.2-2.3 3.2-1.4 0-2-.9-3.3-.8-1.7.2-3.1-.8-3-2.4.1-1.2 1-1.8.9-2.8-.1-.6.1-1.1.5-1.5z"/>',
+  // Obstacle: the boundary shape with a red X.
+  obstacle: '<path d="M12 3 21 9.5 17.5 20h-11L3 9.5z"/><path d="M9.5 10.5l5 5M14.5 10.5l-5 5" stroke="#e5484d"/>',
   // Split: the field as two halves with a solid cut line through the gap.
   split: '<path d="M9.5 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5.5M14.5 4H20a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5.5"/><path d="M12 2v20"/>',
   pause: '<path d="M8 5v14M16 5v14" stroke-width="4"/>',
   play: '<path d="M7 4v16l13-8z"/>',
-  offset: '<path d="M4 4v16M14 4v16" stroke-dasharray="3 2"/><path d="M7 12h10M14 9l3 3-3 3"/>',
+  fit: '<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   check: '<path d="M5 12l5 5L20 7"/>',
 };
@@ -122,6 +122,7 @@ function wireSeg(sel, onChange) {
 // ---------- projects screen ----------
 function showProjects() {
   S.current = null;
+  stopTracking();
   $('#screen-map').classList.add('hidden');
   $('#screen-projects').classList.remove('hidden');
   renderProjectList();
@@ -313,14 +314,35 @@ function updateSatThumb() {
   $('#thumb-sat').style.backgroundImage = `url("${L.Util.template(SAT_URL, { z, x: t.x, y: t.y })}")`;
 }
 
-const geo = new URLSearchParams(location.search).has('sim') ? startSimulator(map, new URLSearchParams(location.search).get('sim')) : navigator.geolocation;
+const SIM = new URLSearchParams(location.search).has('sim');
+const geo = SIM ? startSimulator(map, new URLSearchParams(location.search).get('sim')) : navigator.geolocation;
 
 function showMe(lat, lng) {
+  if (S.drive) return; // the truck arrow shows your position while driving
   if (!meMarker) meMarker = L.marker([lat, lng], { icon: L.divIcon({ className: 'me-dot', iconSize: [18, 18] }), interactive: false, zIndexOffset: 900 }).addTo(map);
   else meMarker.setLatLng([lat, lng]);
 }
+function hideMe() {
+  meMarker?.remove();
+  meMarker = null;
+}
+// Blue dot keeps following your position while a project is open, not just the first fix.
+// (Not with the simulator: every watch there advances the pretend truck.)
+let meWatch = null, lastMe = null;
+function startTracking() {
+  if (!geo || SIM || meWatch != null) return;
+  meWatch = geo.watchPosition((pos) => {
+    lastMe = [pos.coords.latitude, pos.coords.longitude];
+    showMe(...lastMe);
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+}
+function stopTracking() {
+  if (meWatch != null) geo.clearWatch(meWatch);
+  meWatch = null;
+}
 function locate(quiet = false) {
   if (!geo) return toast('Location is not available on this device');
+  if (lastMe) map.setView(lastMe, Math.max(map.getZoom(), 16)); // jump straight away, then refine
   geo.getCurrentPosition((pos) => {
     showMe(pos.coords.latitude, pos.coords.longitude);
     map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 16));
@@ -349,6 +371,7 @@ function openProject(id, opts = {}) {
   if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60] });
   else if (S.prefs.lastView) map.setView(S.prefs.lastView.c, S.prefs.lastView.z);
   if (opts.locate || !pts.length) locate(true);
+  startTracking();
 }
 
 function pushHistory() {
@@ -724,7 +747,8 @@ $('#form-drive').addEventListener('submit', (e) => {
   startDrive({ projectId: S.current.id, type: segValue('#sd-type') || 'field', name: e.target.name.value.trim() || 'Field', offsetFt: sdOffFt, side, fixes: [], paused: false, startedAt: Date.now() });
 });
 
-const D = { watchId: null, wakeLock: null, raw: null, frozen: null, live: null, truck: null, frozenUpto: 0, follow: true, lastSaved: 0, lastPos: null };
+// camera: 'fit' (whole track in view) | 'follow' (truck centred, zoomed in); auto: false after you move the map.
+const D = { watchId: null, wakeLock: null, raw: null, frozen: null, live: null, truck: null, frozenUpto: 0, camera: 'fit', auto: true, lastSaved: 0, lastPos: null };
 
 function driveOpts(closed) {
   return { offsetM: S.drive.offsetFt * FT, side: S.drive.side, closed };
@@ -736,24 +760,21 @@ function startDrive(state) {
   render();
   $('#screen-map').classList.add('driving');
   $('#drive-title').textContent = `${S.current.name} ${S.current.year} · ${state.name}`;
-  $('#off-val').textContent = state.offsetFt;
-  setSeg('#side-seg', state.side);
-  // Offset was just set in the drive sheet; the Offset button brings the panel back if needed.
-  $('#offset-panel').hidden = true;
-  $('#drv-offset').classList.remove('on');
+  hideMe();
   D.raw = L.polyline([], { color: '#4da3ff', weight: 2.5, interactive: false, renderer: canvas }).addTo(gDrive);
   D.frozen = L.layerGroup().addTo(gDrive);
   D.live = L.polyline([], { color: '#f5d33a', weight: 3.5, interactive: false, className: 'bnd-field' }).addTo(gDrive);
   D.frozenUpto = 0;
-  D.follow = true;
-  $('#drv-follow').classList.add('on');
+  D.camera = 'fit';
+  D.auto = true;
+  updateCameraButton();
   const fixes = state.fixes.map(unpackFix);
   D.raw.setLatLngs(fixes.map((f) => [f.lat, f.lng]));
   D._fixes = fixes;
   D.distM = fixes.reduce((s, f, i) => (i ? s + distanceM([fixes[i - 1].lat, fixes[i - 1].lng], [f.lat, f.lng]) : 0), 0);
   D.bounds = L.latLngBounds(fixes.map((f) => [f.lat, f.lng]));
   D.maxFromStart = fixes.reduce((m, f) => Math.max(m, distanceM([fixes[0].lat, fixes[0].lng], [f.lat, f.lng])), 0);
-  if (fixes.length) setTimeout(() => fitDrive(false), 0); // resumed drive: show what's recorded so far
+  if (fixes.length) setTimeout(() => moveCamera(false), 0); // resumed drive: show what's recorded so far
   updateTrackStats();
   clearInterval(D.clock);
   D.clock = setInterval(updateClock, 1000);
@@ -784,7 +805,7 @@ function onFix(pos) {
   if (!D.truck) D.truck = L.marker([f.lat, f.lng], { icon: truckIcon(hdg), interactive: false, zIndexOffset: 1000 }).addTo(gDrive);
   else { D.truck.setLatLng([f.lat, f.lng]); D.truck.setIcon(truckIcon(hdg)); }
   D.bounds.extend([f.lat, f.lng]);
-  if (D.follow) fitDrive();
+  if (D.auto) moveCamera();
   updateStats(f);
   if (S.drive.paused) return;
   if (f.acc != null && f.acc > 30) return; // too poor to use
@@ -794,27 +815,59 @@ function onFix(pos) {
   S.drive.fixes.push(packFix(f));
   updateTrackStats();
   if (closesLoop(prev, f)) { finishDrive(true); return; }
-  D.raw.addLatLng([f.lat, f.lng]);
-  refreshPreview();
+  // Redrawing lines mid-zoom places them at the wrong scale for a moment; catch up when it ends.
+  if (D.zooming) D.dirty = true;
+  else { D.raw.addLatLng([f.lat, f.lng]); refreshPreview(); }
   persistDrive();
 }
+map.on('zoomstart', () => { D.zooming = true; });
+map.on('zoomend', () => {
+  D.zooming = false;
+  if (!S.drive || !D.dirty) return;
+  D.dirty = false;
+  D.raw.setLatLngs(D._fixes.map((f) => [f.lat, f.lng]));
+  refreshPreview();
+});
 
-// Follow: keep the whole track so far and the truck in view, clear of the data card, rail and toolbar.
-function fitDrive(animate = true) {
-  if (!D.bounds.isValid()) return;
+// The part of the map not covered by the data card (top) and the drive toolbar (bottom), in px.
+function clearArea() {
+  const h = map.getSize().y, mapTop = map.getContainer().getBoundingClientRect().top;
+  let top = $('#drive-stats').getBoundingClientRect().bottom - mapTop + 16;
+  let bottom = h - ($('#drive-bottom').getBoundingClientRect().top - mapTop) + 16;
+  // Short screens (landscape phone): never let the padding swallow the whole map.
+  const spare = h - top - bottom;
+  if (spare < 120) { const k = Math.max(0, h - 120) / (top + bottom); top *= k; bottom *= k; }
+  return { top, bottom };
+}
+
+// Fit: the whole track so far in view. Follow: the truck centred in the clear area, zoomed in.
+const FOLLOW_ZOOM = 18;
+function moveCamera(animate = true) {
+  if (!S.drive || !D.bounds.isValid()) return;
   // Fixes faster than the 0.5 s animation (fast simulator) would keep restarting it and lag behind.
   const now = Date.now();
-  if (now - (D.lastFit || 0) < 700) animate = false;
-  D.lastFit = now;
-  const top = $('#drive-stats').getBoundingClientRect().bottom + 16;
-  const left = $('#rail').getBoundingClientRect().right + 16;
-  const bottom = map.getSize().y - $('#drive-bottom').getBoundingClientRect().top + 16;
-  map.fitBounds(D.bounds, { paddingTopLeft: [left, top], paddingBottomRight: [16, bottom], maxZoom: 18, animate, duration: 0.5 });
+  if (now - (D.lastMove || 0) < 700) animate = false;
+  D.lastMove = now;
+  const { top, bottom } = clearArea();
+  if (D.camera === 'fit') {
+    map.fitBounds(D.bounds, { paddingTopLeft: [16, top], paddingBottomRight: [16, bottom], maxZoom: 18, animate, duration: 0.5 });
+  } else if (D.lastPos) {
+    // Shift the centre so the truck sits in the middle of the clear area, not the middle of the screen.
+    const z = FOLLOW_ZOOM, pt = map.project([D.lastPos.lat, D.lastPos.lng], z);
+    const centre = map.unproject(pt.add([0, (bottom - top) / 2]), z);
+    map.setView(centre, z, { animate, duration: 0.5 });
+  }
 }
-function stopFollowing() {
-  if (!S.drive || !D.follow) return;
-  D.follow = false;
-  $('#drv-follow').classList.remove('on');
+function updateCameraButton() {
+  const follow = D.camera === 'follow';
+  $('#drv-camera-lbl').textContent = follow ? 'Follow' : 'Fit';
+  $('#drv-camera .ico').innerHTML = svgIcon(follow ? 'nav' : 'fit');
+  $('#drv-camera').classList.toggle('on', D.auto);
+}
+function pauseCamera() {
+  if (!S.drive || !D.auto) return;
+  D.auto = false;
+  updateCameraButton();
 }
 
 // Auto-close: once the drive has been well away from its start, passing back within 20 ft of the
@@ -919,24 +972,30 @@ function stopDrive() {
   S.drive = null;
   try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ }
   $('#screen-map').classList.remove('driving');
+  if (lastMe) showMe(...lastMe);
 }
 
 $('#drv-pause').addEventListener('click', () => { S.drive.paused = !S.drive.paused; setPausedUi(); persistDrive(true); toast(S.drive.paused ? 'Paused. Fixes are not recorded.' : 'Recording'); });
-$('#drv-offset').addEventListener('click', () => { const p = $('#offset-panel'); p.hidden = !p.hidden; $('#drv-offset').classList.toggle('on', !p.hidden); });
-$('#drv-follow').addEventListener('click', () => { D.follow = !D.follow; $('#drv-follow').classList.toggle('on', D.follow); if (D.follow) fitDrive(); });
-// Moving or pinching the map yourself turns Follow off until you tap it again.
-map.on('dragstart', stopFollowing);
-map.getContainer().addEventListener('touchstart', (e) => { if (e.touches.length > 1) stopFollowing(); }, { passive: true });
-function changeDriveOffset(ft, side) {
-  S.drive.offsetFt = ft; S.drive.side = side;
-  S.prefs.offsetFt = ft; S.prefs.side = side; savePrefs();
-  $('#off-val').textContent = ft;
-  refreshPreview(true);
-  persistDrive(true);
+// Fit / Follow button: tapping switches mode; after you've moved the map, the first tap just resumes.
+$('#drv-camera').addEventListener('click', () => {
+  if (D.auto) D.camera = D.camera === 'fit' ? 'follow' : 'fit';
+  D.auto = true;
+  updateCameraButton();
+  moveCamera();
+});
+// Moving or pinching the map yourself pauses the camera until you tap Fit / Follow again.
+map.on('dragstart', pauseCamera);
+map.getContainer().addEventListener('touchstart', (e) => { if (e.touches.length > 1) pauseCamera(); }, { passive: true });
+// Rotating the phone resizes the map. The window 'resize' event can arrive before the layout has
+// changed, leaving Leaflet with the old size (Follow then centres off screen), so watch the map's
+// own box instead, then re-aim the camera for the new shape.
+function onMapResized() {
+  map.invalidateSize({ pan: false });
+  if (S.drive && D.auto) moveCamera(false);
 }
-$('#off-minus').addEventListener('click', () => changeDriveOffset(Math.max(0, S.drive.offsetFt - 1), S.drive.side));
-$('#off-plus').addEventListener('click', () => changeDriveOffset(Math.min(500, S.drive.offsetFt + 1), S.drive.side));
-wireSeg('#side-seg', (v) => changeDriveOffset(S.drive.offsetFt, v));
+new ResizeObserver(onMapResized).observe(map.getContainer());
+// Backup for iOS finishing its rotation layout late.
+window.addEventListener('orientationchange', () => setTimeout(onMapResized, 400));
 $('#drv-cancel').addEventListener('click', () => {
   if (S.drive.fixes.length > 5 && !confirm('Discard this drive? The recorded GPS points will be lost.')) return;
   stopDrive();

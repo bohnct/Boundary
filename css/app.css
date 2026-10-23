@@ -41,6 +41,7 @@
   --sel-ink: #ffffff;
   --sel-tint: rgba(47, 111, 62, 0.12);
   --slough-text: #1f7fa8;
+  --map-blank: #fff;
   --danger: #c8372a;
   --warn: #b45309;
   --proj-glow: #ffffff;
@@ -123,7 +124,7 @@ h2 { font-size: 19px; font-weight: 800; }
 .layer-tiles { display: flex; gap: 16px; }
 .layer-tiles button { width: 84px; background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--text); }
 .lthumb { width: 72px; height: 56px; border-radius: 10px; border: 1px solid var(--line-2); background: #556b3a center / cover no-repeat; display: block; overflow: hidden; }
-.lthumb.blank { background: #000; }
+.lthumb.blank { background: linear-gradient(135deg, #fff 50%, #000 50%); } /* None: white by day, black at night */
 .layer-tiles button[aria-checked="true"] .lthumb { border-color: var(--sel); box-shadow: 0 0 0 2px var(--sel); }
 .layer-tiles button[aria-checked="true"] .lname { color: var(--sel); font-weight: 700; }
 .set-row { display: flex; align-items: center; gap: 12px; }
@@ -142,11 +143,11 @@ h2 { font-size: 19px; font-weight: 800; }
 .toolbar button:disabled { opacity: 0.4; }
 
 /* edit vs drive mode visibility */
-#screen-map.driving .edit-only { display: none !important; }
+#screen-map.driving .edit-only, #screen-map.driving .rail { display: none !important; } /* driving: data card + toolbar only */
 #screen-map:not(.driving) .drive-only { display: none !important; }
 #screen-map:not(.editing) .edit-tools { display: none !important; }
 
-.drive-stats { position: absolute; z-index: 800; left: calc(var(--safe-l) + 74px); right: calc(var(--safe-r) + 12px); top: calc(var(--safe-t) + 12px); padding: 10px 14px 12px; border-radius: 14px; display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
+.drive-stats { position: absolute; z-index: 800; left: calc(var(--safe-l) + 12px); right: calc(var(--safe-r) + 12px); top: calc(var(--safe-t) + 12px); padding: 10px 14px 12px; border-radius: 14px; display: flex; flex-direction: column; gap: 10px; }
 .rec-row { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .rec-row .rec-dot { width: 8px; height: 8px; border-width: 0; }
 .rec-state { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; color: #ef4444; }
@@ -161,8 +162,6 @@ h2 { font-size: 19px; font-weight: 800; }
 .lbl { font-size: 11px; color: var(--muted); font-weight: 600; }
 .val { font-size: 18px; font-weight: 800; }
 
-.offset-panel { padding: 12px 14px; border-radius: 16px; background: var(--sheet); border: 1.5px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
-.offset-row { display: flex; align-items: center; gap: 10px; }
 .stepper { display: flex; align-items: center; border-radius: 12px; border: 1.5px solid var(--line-2); overflow: hidden; flex: none; }
 .stepper button { width: 44px; height: 44px; border: 0; background: var(--card); font-size: 22px; font-weight: 700; }
 .step-val { width: 76px; text-align: center; font-size: 18px; font-weight: 800; }
@@ -250,7 +249,8 @@ h2 { font-size: 19px; font-weight: 800; }
 
 /* iPad / PC */
 @media (min-width: 700px) {
-  #screen-projects { max-width: 640px; margin: 0 auto; }
+  /* Wide / landscape: background fills the screen, content stays a comfortable width in the middle. */
+  #screen-projects { padding-left: max(calc(var(--safe-l) + 16px), calc((100% - 640px) / 2)); padding-right: max(calc(var(--safe-r) + 16px), calc((100% - 640px) / 2)); }
   .bottom-stack { max-width: 560px; left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); }
 }
 #screen-map.placing .leaflet-container { cursor: crosshair; }
