@@ -9,14 +9,14 @@ A phone web app (PWA) for drawing or driving field boundaries and obstacles (slo
 - **Map editor** — tap the pencil to show the tools along the bottom:
   - **Boundary** / **Obstacle**: tap corners, then Done.
   - **Move**: tap a boundary, drag its white points.
-  - **Add pt**: tap a small yellow midpoint to add a corner.
-  - **Remove**: tap a red point to delete it.
+  - **Add pt**: tap a + point halfway along an edge to add a corner.
+  - **Remove**: tap a red × point to delete that corner.
   - **Split**: tap a field, then two points on opposite sides of it.
   - Undo button on the left rail while editing.
   - With a keyboard (PC, iPad): Esc cancels / closes, Ctrl+Z (Cmd+Z) undoes.
 - Works on iPhone, iPad (either orientation) and in a desktop browser.
 - **Drive with GPS** (record button on the rail):
-  - Blue line and dots = raw GPS fixes only.
+  - Blue line = raw GPS fixes only, joined by straight lines.
   - Yellow line = smoothed boundary, shifted by the offset (feet, left/right of travel). It trails a fix or two behind the truck because the curve into a point needs the direction you leave it in.
   - Smoothing uses each fix's heading and speed (Hermite curves), so 1 Hz fixes at speed don't cut corners. Rounded corners are kept, matching what the seeder does.
   - Raw fixes are kept with the boundary, so the offset can be changed after the drive (⋯ on the boundary in the list).

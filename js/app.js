@@ -8,7 +8,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
 // Shown on the Projects screen so you can tell an updated copy has loaded.
 // Keep in step with VERSION in sw.js (bump both when shipping).
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -265,7 +265,10 @@ function setLayer(name) {
   savePrefs();
 }
 setLayer(S.prefs.layer);
-const canvas = L.canvas({ padding: 0.3 });
+// The GPS line goes in its own pane above the boundary lines, so the blue driven line stays
+// visible on top of the yellow boundary even at 0 ft offset.
+map.createPane('gps').style.zIndex = 450;
+const canvas = L.canvas({ padding: 0.3, pane: 'gps' });
 const gShapes = L.layerGroup().addTo(map);
 const gEdit = L.layerGroup().addTo(map);
 const gDraw = L.layerGroup().addTo(map);
@@ -721,7 +724,7 @@ $('#form-drive').addEventListener('submit', (e) => {
   startDrive({ projectId: S.current.id, type: segValue('#sd-type') || 'field', name: e.target.name.value.trim() || 'Field', offsetFt: sdOffFt, side, fixes: [], paused: false, startedAt: Date.now() });
 });
 
-const D = { watchId: null, wakeLock: null, raw: null, dots: null, frozen: null, live: null, truck: null, frozenUpto: 0, follow: true, lastSaved: 0, lastPos: null };
+const D = { watchId: null, wakeLock: null, raw: null, frozen: null, live: null, truck: null, frozenUpto: 0, follow: true, lastSaved: 0, lastPos: null };
 
 function driveOpts(closed) {
   return { offsetM: S.drive.offsetFt * FT, side: S.drive.side, closed };
@@ -739,14 +742,12 @@ function startDrive(state) {
   $('#offset-panel').hidden = true;
   $('#drv-offset').classList.remove('on');
   D.raw = L.polyline([], { color: '#4da3ff', weight: 2.5, interactive: false, renderer: canvas }).addTo(gDrive);
-  D.dots = L.layerGroup().addTo(gDrive);
   D.frozen = L.layerGroup().addTo(gDrive);
   D.live = L.polyline([], { color: '#f5d33a', weight: 3.5, interactive: false, className: 'bnd-field' }).addTo(gDrive);
   D.frozenUpto = 0;
   D.follow = true;
   $('#drv-follow').classList.add('on');
   const fixes = state.fixes.map(unpackFix);
-  fixes.forEach((f) => addDot(f));
   D.raw.setLatLngs(fixes.map((f) => [f.lat, f.lng]));
   D._fixes = fixes;
   D.distM = fixes.reduce((s, f, i) => (i ? s + distanceM([fixes[i - 1].lat, fixes[i - 1].lng], [f.lat, f.lng]) : 0), 0);
@@ -762,10 +763,6 @@ function startDrive(state) {
   D.watchId = geo.watchPosition(onFix, (err) => toast(geoErrText(err)), { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
   requestWakeLock();
   persistDrive(true);
-}
-
-function addDot(f) {
-  L.circleMarker([f.lat, f.lng], { radius: 3.5, color: '#0f1108', weight: 1.5, fillColor: '#ffffff', fillOpacity: 1, interactive: false, renderer: canvas }).addTo(D.dots);
 }
 
 function truckIcon(heading) {
@@ -798,7 +795,6 @@ function onFix(pos) {
   updateTrackStats();
   if (closesLoop(prev, f)) { finishDrive(true); return; }
   D.raw.addLatLng([f.lat, f.lng]);
-  addDot(f);
   refreshPreview();
   persistDrive();
 }
@@ -806,6 +802,10 @@ function onFix(pos) {
 // Follow: keep the whole track so far and the truck in view, clear of the data card, rail and toolbar.
 function fitDrive(animate = true) {
   if (!D.bounds.isValid()) return;
+  // Fixes faster than the 0.5 s animation (fast simulator) would keep restarting it and lag behind.
+  const now = Date.now();
+  if (now - (D.lastFit || 0) < 700) animate = false;
+  D.lastFit = now;
   const top = $('#drive-stats').getBoundingClientRect().bottom + 16;
   const left = $('#rail').getBoundingClientRect().right + 16;
   const bottom = map.getSize().y - $('#drive-bottom').getBoundingClientRect().top + 16;

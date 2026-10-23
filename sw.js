@@ -1,5 +1,5 @@
 // App shell is cached for offline use; map tiles are cached as you view them.
-const VERSION = 'v13'; // keep in step with APP_VERSION in js/app.js
+const VERSION = 'v14'; // keep in step with APP_VERSION in js/app.js and the ?v= in index.html
 const SHELL = `shell-${VERSION}`;
 const TILES = 'tiles-v2'; // v1 held opaque tiles, which CORS tile requests can't use
 const MAX_TILES = 3000;
@@ -7,8 +7,11 @@ const NET_TIMEOUT_MS = 3000;
 const FILES = ['./', 'index.html', 'css/app.css', 'manifest.webmanifest', 'js/app.js', 'js/geo.js', 'js/formats.js', 'js/shapefile.js', 'js/zip.js', 'js/sim.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
+// GitHub Pages lets browsers reuse files for 10 minutes. Always go to the server for app files
+// (cache: 'reload' when installing, 'no-cache' = revalidate when running), or a new version can
+// be put together from a mix of new and old files.
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== TILES).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
@@ -38,7 +41,11 @@ self.addEventListener('fetch', (e) => {
   if (url.origin === location.origin) {
     // Network first so updates arrive, but use the cache after a few seconds:
     // out in a field the signal is often too weak to load anything.
-    const net = fetch(e.request).then((res) => {
+    // A navigation request can't be copied with new options, so page loads go by URL.
+    const fresh = e.request.mode === 'navigate'
+      ? fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+      : fetch(e.request, { cache: 'no-cache' });
+    const net = fresh.then((res) => {
       if (res.ok) {
         const copy = res.clone();
         caches.open(SHELL).then((c) => c.put(e.request, copy));
@@ -47,7 +54,8 @@ self.addEventListener('fetch', (e) => {
     });
     net.catch(() => {});
     const timeout = new Promise((_, reject) => setTimeout(reject, NET_TIMEOUT_MS));
-    e.respondWith(Promise.race([net, timeout]).catch(async () => (await caches.match(e.request))
+    // ignoreSearch: index.html asks for js/app.js?v=N; the offline copy is stored without the ?v.
+    e.respondWith(Promise.race([net, timeout]).catch(async () => (await caches.match(e.request, { ignoreSearch: true }))
       || net.catch(() => caches.match('index.html'))));
   }
 });
