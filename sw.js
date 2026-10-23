@@ -1,5 +1,5 @@
 // App shell is cached for offline use; map tiles are cached as you view them.
-const VERSION = 'v15'; // keep in step with APP_VERSION in js/app.js and the ?v= in index.html
+const VERSION = 'v16'; // keep in step with APP_VERSION in js/app.js and the ?v= in index.html
 const SHELL = `shell-${VERSION}`;
 const TILES = 'tiles-v2'; // v1 held opaque tiles, which CORS tile requests can't use
 const MAX_TILES = 3000;

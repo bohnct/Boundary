@@ -56,6 +56,19 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, "Helvetica Neue", Segoe UI, sans-serif; overscroll-behavior: none; }
 body { position: fixed; inset: 0; overflow: hidden; }
+/* iOS home-screen app with the see-through status bar: the page is told the screen is shorter
+   than it is (by the status bar's height), so anything sized to it stops short and leaves a black
+   strip at the bottom (100% and 100vh included). Only 100lvh is the real screen height there, so
+   the page is a fixed layer of exactly that height. Browser tabs: unchanged. (Same fix as the
+   owner's Terrain & Drainage tool.) */
+@supports (height: 100lvh) {
+  @media (display-mode: standalone) {
+    html { height: 100lvh; }
+    body { bottom: auto; height: 100lvh; }
+  }
+  html.standalone { height: 100lvh; }
+  html.standalone body { bottom: auto; height: 100lvh; }
+}
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 h1, h2 { margin: 0; letter-spacing: -0.3px; }
