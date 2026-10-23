@@ -115,6 +115,7 @@ h2 { font-size: 19px; font-weight: 800; }
 .chip-big { font-size: 24px; font-weight: 800; letter-spacing: -0.3px; }
 .chip-big::after { content: ' ›'; color: var(--muted); font-weight: 600; } /* tap for the field data list */
 .chip-sub { font-size: 12px; color: var(--muted); }
+.chip-sub:empty { display: none; }
 
 /* panels that drop down across the top from the rail (layers, view settings) */
 .top-panel { position: absolute; z-index: 1100; left: calc(var(--safe-l) + 74px); right: calc(var(--safe-r) + 12px); top: calc(var(--safe-t) + 12px); padding: 14px; border-radius: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 520px; }

@@ -8,7 +8,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
 // Shown on the Projects screen so you can tell an updated copy has loaded.
 // Keep in step with VERSION in sw.js (bump both when shipping).
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -26,10 +26,13 @@ const ICONS = {
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
   poly: '<path d="M12 3 21 9.5 17.5 20h-11L3 9.5z"/>',
   move: '<path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/>',
-  addpt: '<circle cx="9" cy="12" r="5"/><path d="M18 8v8M14 12h8"/>',
-  rmpt: '<circle cx="9" cy="12" r="5"/><path d="M14 12h8"/>',
-  obstacle: '<path d="M8 4.5c3-1.5 7-1 9.5 1.5s3 6.5 1 9.5-5.5 5-9 4.5-6-3-6.5-6.5S5 6 8 4.5z"/>',
-  split: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M12 2v20" stroke-dasharray="3 2"/>',
+  // Add / remove point: a corner on an edge, with the + or − lifted clear to the top right.
+  addpt: '<path d="M3 20 14 11.75"/><circle cx="8.5" cy="15.9" r="2.6" fill="currentColor"/><path d="M18.5 2.5v6M15.5 5.5h6"/>',
+  rmpt: '<path d="M3 20 14 11.75"/><circle cx="8.5" cy="15.9" r="2.6" fill="currentColor"/><path d="M15.5 5.5h6"/>',
+  // Obstacle: a field with an irregular area cut out of it.
+  obstacle: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8.5 8.2c1.3-1.4 3.2-.6 4.4-1 1.6-.5 3.3.4 3.4 2.1.1 1.3-.9 2-.6 3.2.4 1.5-.5 3.2-2.3 3.2-1.4 0-2-.9-3.3-.8-1.7.2-3.1-.8-3-2.4.1-1.2 1-1.8.9-2.8-.1-.6.1-1.1.5-1.5z"/>',
+  // Split: the field as two halves with a solid cut line through the gap.
+  split: '<path d="M9.5 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5.5M14.5 4H20a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5.5"/><path d="M12 2v20"/>',
   pause: '<path d="M8 5v14M16 5v14" stroke-width="4"/>',
   play: '<path d="M7 4v16l13-8z"/>',
   offset: '<path d="M4 4v16M14 4v16" stroke-dasharray="3 2"/><path d="M7 12h10M14 9l3 3-3 3"/>',
@@ -474,7 +477,7 @@ function updateAreaChip() {
   const a = computeAreas(p);
   $('#chip-label').textContent = `${p.name} ${p.year} · net`;
   $('#chip-net').textContent = `${fmtAc(a.net)} ac`;
-  $('#chip-sub').textContent = a.slough > 0 ? `${fmtAc(a.gross)} gross − ${fmtAc(a.slough)} obstacles` : `${a.perField.length} field${a.perField.length === 1 ? '' : 's'}`;
+  $('#chip-sub').textContent = a.slough > 0 ? `${fmtAc(a.gross)} gross − ${fmtAc(a.slough)} obstacles` : '';
 }
 
 // ---------- tools ----------
@@ -639,8 +642,6 @@ function openBoundaries() {
   openSheet('#sheet-boundaries');
 }
 $('#sb-edit').addEventListener('click', () => openProjectForm(S.current));
-$('#sb-add-field').addEventListener('click', () => { closeSheet(); if (!S.editing) setEditing(true); setTool('boundary'); });
-$('#sb-add-slough').addEventListener('click', () => { closeSheet(); if (!S.editing) setEditing(true); setTool('slough'); });
 $('#sb-export').addEventListener('click', () => openExport());
 
 // ---------- boundary edit ----------
