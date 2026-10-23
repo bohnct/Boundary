@@ -6,6 +6,9 @@ const L = window.L;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
+// Shown on the Projects screen so you can tell an updated copy has loaded.
+// Keep in step with VERSION in sw.js (bump both when shipping).
+const APP_VERSION = 11;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -979,6 +982,7 @@ async function shareOrDownload({ name, data, type }) {
 
 // ---------- startup ----------
 paintIcons();
+$('#app-version').textContent = `Version ${APP_VERSION}`;
 const pendingDrive = load(DRIVE_KEY, null);
 if (pendingDrive && S.projects.some((p) => p.id === pendingDrive.projectId)) {
   openProject(pendingDrive.projectId);
