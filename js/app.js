@@ -276,7 +276,22 @@ function togglePanel(name) {
   $('#btn-view').classList.toggle('open', !!openPanel);
   $('#btn-view').setAttribute('aria-expanded', String(!!openPanel));
   $('#screen-map').classList.toggle('panel-open', !!openPanel);
-  if (openPanel) updateSatThumb();
+  if (openPanel) { updateSatThumb(); updateDiag(); }
+}
+
+// TEMP: screen measurements to track down the black bar at the bottom of the home-screen app.
+function updateDiag() {
+  const cs = getComputedStyle($('#safe-probe'));
+  const vv = window.visualViewport;
+  $('#diag').textContent = [
+    `app ${document.documentElement.classList.contains('standalone') ? 'home-screen' : 'browser'}`,
+    `window ${innerWidth}×${innerHeight}`,
+    `screen ${screen.width}×${screen.height}`,
+    vv ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)}` : '',
+    `page ${document.body.clientHeight} / ${document.documentElement.clientHeight}`,
+    `safe ${parseFloat(cs.paddingTop)} / ${parseFloat(cs.paddingBottom)}`,
+    `iOS ${(navigator.userAgent.match(/OS (\d+)_(\d+)/) || []).slice(1).join('.') || '?'}`,
+  ].filter(Boolean).join(' · ');
 }
 const closePanel = () => { if (openPanel) togglePanel(openPanel); };
 $('#btn-view').addEventListener('click', () => togglePanel('view'));

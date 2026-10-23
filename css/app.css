@@ -55,9 +55,6 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, "Helvetica Neue", Segoe UI, sans-serif; overscroll-behavior: none; }
 body { position: fixed; inset: 0; overflow: hidden; }
-/* iOS home-screen apps with a translucent status bar draw under the status bar but size the
-   page as if it weren't there, leaving an empty strip at the bottom. 100vh is the full screen. */
-html.standalone body { bottom: auto; height: 100vh; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 h1, h2 { margin: 0; letter-spacing: -0.3px; }
@@ -131,6 +128,7 @@ h2 { font-size: 19px; font-weight: 800; }
 .set-row > span { width: 64px; font-weight: 700; flex: none; }
 .set-row.top { align-items: flex-start; padding-top: 10px; border-top: 1px solid var(--line); }
 .set-row.top > span { padding-top: 18px; }
+.diag { margin: 0; font: 11px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); } /* TEMP */
 
 .bottom-stack { position: absolute; z-index: 800; left: calc(var(--safe-l) + 12px); right: calc(var(--safe-r) + 12px); bottom: calc(var(--safe-b) + 14px); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .bottom-stack > * { pointer-events: auto; }
