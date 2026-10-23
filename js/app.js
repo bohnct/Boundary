@@ -247,9 +247,10 @@ if (S.prefs.layer !== 'none') S.prefs.layer = 'satellite';
 const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 // crossOrigin makes tile responses readable (not opaque), so the service worker
 // caches their real size instead of a padded one that eats the storage quota.
-const satLayer = L.tileLayer(SAT_URL, { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' });
+const satLayer = L.tileLayer(SAT_URL, { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true, attribution: 'Esri, Maxar, Earthstar Geographics' });
 
 const map = L.map('map', { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, preferCanvas: false }).setView([50.45, -104.6], 13);
+map.attributionControl.setPrefix(false); // no "Leaflet" link; Esri's imagery credit stays (required by their terms)
 // Layer None is just the plain black map background (#map in CSS).
 function setLayer(name) {
   S.prefs.layer = name;
@@ -383,7 +384,6 @@ function render() {
   }
   renderEditHandles();
   updateAreaChip();
-  updateHint();
 }
 
 // A label spot inside the boundary that avoids sitting on top of a slough.
@@ -402,28 +402,29 @@ function labelPoint(b) {
 
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function vxIcon(cls) { return L.divIcon({ className: `vx ${cls}`, html: '<i></i>', iconSize: [26, 26] }); }
+function vxIcon(cls) { return L.divIcon({ className: `vx ${cls}`, html: '<i></i>', iconSize: [32, 32] }); }
 
 function renderEditHandles() {
   gEdit.clearLayers();
   const b = selected();
   if (!b || !S.editing || S.draw || S.split || S.drive) return;
   const poly = shapeLayers.get(b.id);
-  // Only show handles at least ~20 px apart at this zoom; zoom in to reach the rest.
+  // Only show handles at least ~28 px apart at this zoom; zoom in to reach the rest.
   const shown = new Set();
   let lastPx = null;
   b.ring.forEach((ll, i) => {
     const px = map.latLngToLayerPoint(ll);
-    if (!lastPx || px.distanceTo(lastPx) >= 20) { shown.add(i); lastPx = px; }
+    if (!lastPx || px.distanceTo(lastPx) >= 28) { shown.add(i); lastPx = px; }
   });
   const show = (i) => shown.has(i);
   if (S.tool === 'move') {
     b.ring.forEach((ll, i) => {
       if (!show(i)) return;
       const m = L.marker(ll, { icon: vxIcon(''), draggable: true, autoPan: true, zIndexOffset: 500 });
-      m.on('dragstart', () => { pushHistory(); m.setIcon(vxIcon('drag')); });
+      // Style the drag with a class: setIcon() mid-drag rebuilds the element and cancels the drag.
+      m.on('dragstart', () => { pushHistory(); m.getElement()?.classList.add('dragging'); });
       m.on('drag', (e) => { b.ring[i] = [e.latlng.lat, e.latlng.lng]; poly.setLatLngs(b.ring); });
-      m.on('dragend', () => { m.setIcon(vxIcon('')); delete b.drive; saveProjects(); render(); });
+      m.on('dragend', () => { delete b.drive; saveProjects(); render(); });
       m.addTo(gEdit);
     });
   } else if (S.tool === 'add') {
@@ -500,20 +501,6 @@ function cancelDraw(reRender = true) {
   if (reRender && S.current) { S.tool = 'move'; $$('#toolbar [data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === 'move'))); render(); }
 }
 
-function updateHint() {
-  const h = $('#hint');
-  const b = selected();
-  let msg = '';
-  if (S.draw) msg = S.draw.pts.length < 3 ? `Tap the map to place ${S.draw.type === 'slough' ? 'obstacle' : 'field'} corners (${S.draw.pts.length} so far). You need at least 3.` : 'Keep tapping to add corners, then tap Done.';
-  else if (S.tool === 'split') msg = !S.split ? 'Tap the field you want to split.' : S.split.pts.length < 2 ? 'Tap two points to draw the split line across the field.' : 'Tap Done to split the field along the line.';
-  else if (!S.current.boundaries.length) msg = S.editing ? 'Draw a boundary with the Boundary tool.' : 'Tap the pencil to draw a boundary, or the record button to drive one.';
-  else if (!S.editing) msg = '';
-  else if (!b) msg = S.tool === 'move' ? 'Tap a boundary to edit its points.' : 'Tap a boundary first.';
-  else if (S.tool === 'move') msg = `Drag a white point to move it. Selected: ${b.name}.`;
-  else if (S.tool === 'add') msg = 'Tap a small yellow point to add a corner there.';
-  else if (S.tool === 'remove') msg = 'Tap a red point to remove it.';
-  h.textContent = msg;
-}
 
 function onShapeTap(b, latlng) {
   if (openPanel) return closePanel(); // a tap outside an open panel just closes it
@@ -570,7 +557,6 @@ function renderDraw() {
   } else {
     bar.hidden = true;
   }
-  if (S.current) updateHint();
 }
 
 $('#draw-undo').addEventListener('click', () => { if (S.draw?.pts.length) { S.draw.pts.pop(); renderDraw(); } });
@@ -651,7 +637,6 @@ function openBoundaryEdit(b) {
     beOffFt = b.drive.offsetFt;
     $('#be-off-val').textContent = beOffFt;
     setSeg('#be-side', b.drive.side);
-    $('#be-fixes').textContent = b.drive.fixes.length;
   }
   openSheet('#sheet-bedit');
 }
@@ -940,7 +925,7 @@ function updateExportUi() {
   $('#se-points-row').hidden = !isShp;
   $('#se-proj-row').hidden = !isShp;
   const base = `${safeName(f.name.value)}_${f.year.value}`;
-  $('#se-file').textContent = isShp ? `${base}.zip — .shp, .shx, .dbf, .prj${f.points.checked ? ' + points layer' : ''}` : exportFormat === 'kml' ? `${base}.kml` : `${base}.geojson`;
+  $('#se-file').textContent = `${base}.${isShp ? 'zip' : exportFormat}`;
 }
 wireSeg('#se-format', (v) => { exportFormat = v; updateExportUi(); });
 $('#form-export').addEventListener('input', updateExportUi);

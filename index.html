@@ -14,6 +14,7 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/app.css">
+<script>/* home-screen app? (see html.standalone in app.css) */ if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) document.documentElement.classList.add('standalone');</script>
 <script>/* set the theme before first paint */ try { var t = (JSON.parse(localStorage.getItem('bab.prefs.v1')) || {}).theme || 'night'; document.documentElement.dataset.theme = t === 'day' || (t === 'auto' && !matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark'; } catch (e) { document.documentElement.dataset.theme = 'dark'; }</script>
 </head>
 <body>
@@ -24,7 +25,6 @@
     <div class="logo">Bohn<br>Ag</div>
     <div>
       <h1>Boundaries</h1>
-      <p class="muted">Fields, obstacles &amp; shapefiles</p>
     </div>
   </header>
   <div class="big-actions">
@@ -35,7 +35,7 @@
   <div class="proj-panel">
     <div class="row-between"><h2>Projects</h2><span class="muted small" id="proj-count"></span></div>
     <div id="project-list" class="project-list"></div>
-    <p class="muted small center" id="proj-empty">No projects yet. Start one, or import a shapefile, KML or GeoJSON.</p>
+    <p class="muted small center" id="proj-empty">No projects yet.</p>
   </div>
 </section>
 
@@ -67,7 +67,6 @@
         <button type="button" role="radio" data-val="auto">Auto</button>
       </div>
     </div>
-    <p class="muted small">Auto follows the iPhone's light/dark setting.</p>
     <div class="set-row top">
       <span>Map</span>
       <div class="layer-tiles" role="radiogroup" aria-label="Map layer" id="layer-seg">
@@ -78,7 +77,6 @@
   </div>
 
   <div class="bottom-stack edit-only" id="edit-bottom">
-    <div class="hint" id="hint"></div>
     <div class="draw-bar" id="draw-bar" hidden>
       <button type="button" class="pill" id="draw-undo">Undo point</button>
       <button type="button" class="pill" id="draw-cancel">Cancel</button>
@@ -108,10 +106,7 @@
   </div>
   <div class="bottom-stack drive-only" id="drive-bottom">
     <div class="offset-panel" id="offset-panel">
-      <div class="row-between">
-        <strong>Boundary offset</strong>
-        <div class="legend"><span><i class="lg gps"></i>GPS points</span><span><i class="lg bnd"></i>Smoothed</span></div>
-      </div>
+      <strong>Boundary offset</strong>
       <div class="offset-row">
         <div class="stepper">
           <button type="button" id="off-minus" aria-label="Decrease offset">−</button>
@@ -124,7 +119,6 @@
           <button type="button" role="radio" data-side="right">Right</button>
         </div>
       </div>
-      <p class="muted small" id="offset-note">Measured from the GPS antenna. The smoothed boundary trails a couple of fixes behind the truck.</p>
     </div>
     <nav class="toolbar glass" aria-label="Drive controls">
       <button type="button" id="drv-pause"><span class="ico" data-icon="pause"></span><span id="drv-pause-lbl">Pause</span></button>
@@ -175,7 +169,6 @@
     <div class="tile"><span class="lbl">Obstacles</span><span class="val slough-t" id="t-slough"></span></div>
     <div class="tile hi"><span class="lbl">Net farmable</span><span class="val" id="t-net"></span></div>
   </div>
-  <p class="muted small">Tap a row to show it on the map. Tap ⋯ to rename, change type or delete. All areas in acres.</p>
   <div class="btn-grid">
     <button type="button" class="pill" id="sb-add-field">+ Draw field</button>
     <button type="button" class="pill" id="sb-add-slough">+ Draw obstacle</button>
@@ -209,7 +202,6 @@
           <button type="button" role="radio" data-val="right">Right</button>
         </div>
       </div>
-      <p class="muted small">Recorded from <span id="be-fixes"></span> GPS fixes. Changing the offset redraws this boundary from them (point edits are replaced).</p>
     </div>
     <div class="btn-row">
       <button type="button" class="pill danger" id="be-delete">Delete</button>
@@ -244,7 +236,6 @@
         <button type="button" role="radio" data-val="right">Right</button>
       </div>
     </div>
-    <p class="muted small">Side is relative to your direction of travel. Driving clockwise around a field, the edge is on your left. Keep the screen on; the phone records about one fix per second.</p>
     <div class="btn-row">
       <button type="button" class="pill" data-close>Cancel</button>
       <button type="submit" class="pill primary">Start recording</button>
@@ -276,7 +267,6 @@
         <select name="projection" id="se-proj"></select>
       </label>
     </div>
-    <p class="muted small">Each shape gets NAME, PART, YEAR, TYPE and ACRES attributes.</p>
     <div class="file-note" id="se-file"></div>
     <div class="btn-row">
       <button type="button" class="pill" data-close>Cancel</button>
