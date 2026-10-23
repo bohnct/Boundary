@@ -1,4 +1,4 @@
-import { buildBoundary, splitRing, acres, distanceM, utmZoneFor, pointInRing } from './geo.js';
+import { buildBoundary, splitRing, acres, distanceM, utmZoneFor, pointInRing, makeProjector } from './geo.js';
 import { computeAreas, fmtAc, buildShapefileZip, buildKml, buildGeoJson, importFile, projectCenterLng, exportFeatures, safeName } from './formats.js';
 import { startSimulator } from './sim.js';
 
@@ -8,7 +8,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
 // Shown on the Projects screen so you can tell an updated copy has loaded.
 // Keep in step with VERSION in sw.js (bump both when shipping).
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -750,6 +750,9 @@ function startDrive(state) {
   D.raw.setLatLngs(fixes.map((f) => [f.lat, f.lng]));
   D._fixes = fixes;
   D.distM = fixes.reduce((s, f, i) => (i ? s + distanceM([fixes[i - 1].lat, fixes[i - 1].lng], [f.lat, f.lng]) : 0), 0);
+  D.bounds = L.latLngBounds(fixes.map((f) => [f.lat, f.lng]));
+  D.maxFromStart = fixes.reduce((m, f) => Math.max(m, distanceM([fixes[0].lat, fixes[0].lng], [f.lat, f.lng])), 0);
+  if (fixes.length) setTimeout(() => fitDrive(false), 0); // resumed drive: show what's recorded so far
   updateTrackStats();
   clearInterval(D.clock);
   D.clock = setInterval(updateClock, 1000);
@@ -783,7 +786,8 @@ function onFix(pos) {
   D._lastHeading = hdg;
   if (!D.truck) D.truck = L.marker([f.lat, f.lng], { icon: truckIcon(hdg), interactive: false, zIndexOffset: 1000 }).addTo(gDrive);
   else { D.truck.setLatLng([f.lat, f.lng]); D.truck.setIcon(truckIcon(hdg)); }
-  if (D.follow) map.panTo([f.lat, f.lng], { animate: true, duration: 0.5 });
+  D.bounds.extend([f.lat, f.lng]);
+  if (D.follow) fitDrive();
   updateStats(f);
   if (S.drive.paused) return;
   if (f.acc != null && f.acc > 30) return; // too poor to use
@@ -792,10 +796,42 @@ function onFix(pos) {
   D._fixes.push(f);
   S.drive.fixes.push(packFix(f));
   updateTrackStats();
+  if (closesLoop(prev, f)) { finishDrive(true); return; }
   D.raw.addLatLng([f.lat, f.lng]);
   addDot(f);
   refreshPreview();
   persistDrive();
+}
+
+// Follow: keep the whole track so far and the truck in view, clear of the data card, rail and toolbar.
+function fitDrive(animate = true) {
+  if (!D.bounds.isValid()) return;
+  const top = $('#drive-stats').getBoundingClientRect().bottom + 16;
+  const left = $('#rail').getBoundingClientRect().right + 16;
+  const bottom = map.getSize().y - $('#drive-bottom').getBoundingClientRect().top + 16;
+  map.fitBounds(D.bounds, { paddingTopLeft: [left, top], paddingBottomRight: [16, bottom], maxZoom: 18, animate, duration: 0.5 });
+}
+function stopFollowing() {
+  if (!S.drive || !D.follow) return;
+  D.follow = false;
+  $('#drv-follow').classList.remove('on');
+}
+
+// Auto-close: once the drive has been well away from its start, passing back within 20 ft of the
+// first fix finishes it. Checks the whole segment between fixes, since at speed 1 Hz fixes are
+// further apart than 20 ft and could step right over the start.
+const CLOSE_M = 20 * FT;
+const CLOSE_AWAY_M = 30; // must first get this far from the start
+function closesLoop(prev, f) {
+  const s = D._fixes[0];
+  if (!prev || !s || s === f) return false;
+  const P = makeProjector(s.lat, s.lng);
+  const a = P.toXY([prev.lat, prev.lng]), b = P.toXY([f.lat, f.lng]);
+  D.maxFromStart = Math.max(D.maxFromStart, Math.hypot(b[0], b[1]));
+  if (D.maxFromStart < CLOSE_AWAY_M) return false;
+  const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / len2)) : 0;
+  return Math.hypot(a[0] + t * dx, a[1] + t * dy) <= CLOSE_M;
 }
 
 const CHUNK = 100;
@@ -887,8 +923,10 @@ function stopDrive() {
 
 $('#drv-pause').addEventListener('click', () => { S.drive.paused = !S.drive.paused; setPausedUi(); persistDrive(true); toast(S.drive.paused ? 'Paused. Fixes are not recorded.' : 'Recording'); });
 $('#drv-offset').addEventListener('click', () => { const p = $('#offset-panel'); p.hidden = !p.hidden; $('#drv-offset').classList.toggle('on', !p.hidden); });
-$('#drv-follow').addEventListener('click', () => { D.follow = !D.follow; $('#drv-follow').classList.toggle('on', D.follow); if (D.follow && D.lastPos) map.panTo([D.lastPos.lat, D.lastPos.lng]); });
-map.on('dragstart', () => { if (S.drive && D.follow) { D.follow = false; $('#drv-follow').classList.remove('on'); } });
+$('#drv-follow').addEventListener('click', () => { D.follow = !D.follow; $('#drv-follow').classList.toggle('on', D.follow); if (D.follow) fitDrive(); });
+// Moving or pinching the map yourself turns Follow off until you tap it again.
+map.on('dragstart', stopFollowing);
+map.getContainer().addEventListener('touchstart', (e) => { if (e.touches.length > 1) stopFollowing(); }, { passive: true });
 function changeDriveOffset(ft, side) {
   S.drive.offsetFt = ft; S.drive.side = side;
   S.prefs.offsetFt = ft; S.prefs.side = side; savePrefs();
@@ -904,7 +942,8 @@ $('#drv-cancel').addEventListener('click', () => {
   stopDrive();
   render();
 });
-$('#drv-finish').addEventListener('click', () => {
+$('#drv-finish').addEventListener('click', () => finishDrive());
+function finishDrive(auto = false) {
   const fx = D._fixes;
   if (fx.length < 3) return toast('Not enough GPS points yet. Keep driving.');
   const { line } = buildBoundary(fx, driveOpts(true));
@@ -919,8 +958,8 @@ $('#drv-finish').addEventListener('click', () => {
   S.selectedId = b.id;
   render();
   map.fitBounds(L.latLngBounds(b.ring), { padding: [70, 70] });
-  toast(`${b.name}: ${fmtAc(acres(b.ring))} ac from ${fx.length} GPS points`, 3500);
-});
+  toast(`${auto ? 'Back at the start. ' : ''}${b.name}: ${fmtAc(acres(b.ring))} ac`, 3500);
+}
 
 // ---------- export ----------
 let exportFormat = 'shp';
