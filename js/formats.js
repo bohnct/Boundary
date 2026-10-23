@@ -50,7 +50,11 @@ const POINT_FIELDS = [
   { name: 'IDX', type: 'N', length: 6, decimals: 0 },
 ];
 
-// mode: 'cutout' (sloughs as holes) | 'separate'
+// Stored type 'slough' is called "obstacle" in the app and in exported files.
+const typeOut = (t) => (t === 'slough' ? 'obstacle' : t);
+const isObstacle = (s) => /^(obstacle|slough)$/i.test(String(s || '').trim());
+
+// mode: 'cutout' (obstacles as holes) | 'separate'
 export function exportFeatures(project, mode) {
   const areas = computeAreas(project);
   const base = { NAME: project.name, YEAR: Number(project.year) || null };
@@ -59,11 +63,11 @@ export function exportFeatures(project, mode) {
     for (const p of areas.perField) {
       feats.push({ rings: [p.field.ring, ...p.sloughs.map((s) => s.ring)], attrs: { ...base, PART: p.field.name, TYPE: 'field', ACRES: p.net } });
     }
-    for (const s of areas.loose) feats.push({ rings: [s.ring], attrs: { ...base, PART: s.name, TYPE: 'slough', ACRES: acres(s.ring) } });
+    for (const s of areas.loose) feats.push({ rings: [s.ring], attrs: { ...base, PART: s.name, TYPE: typeOut('slough'), ACRES: acres(s.ring) } });
   } else {
     for (const b of project.boundaries) {
       if (b.ring.length < 3) continue;
-      feats.push({ rings: [b.ring], attrs: { ...base, PART: b.name, TYPE: b.type, ACRES: acres(b.ring) } });
+      feats.push({ rings: [b.ring], attrs: { ...base, PART: b.name, TYPE: typeOut(b.type), ACRES: acres(b.ring) } });
     }
   }
   return feats;
@@ -89,7 +93,7 @@ export function buildShapefileZip(project, opts) {
   files.push({ name: `${base}.shp`, data: polys.shp }, { name: `${base}.shx`, data: polys.shx }, { name: `${base}.dbf`, data: polys.dbf }, { name: `${base}.prj`, data: prj }, { name: `${base}.cpg`, data: cpg });
   if (opts.points) {
     const pts = [];
-    for (const b of project.boundaries) b.ring.forEach((ll, i) => pts.push({ ll, attrs: { NAME: project.name, PART: b.name, YEAR: Number(project.year) || null, TYPE: b.type, IDX: i + 1 } }));
+    for (const b of project.boundaries) b.ring.forEach((ll, i) => pts.push({ ll, attrs: { NAME: project.name, PART: b.name, YEAR: Number(project.year) || null, TYPE: typeOut(b.type), IDX: i + 1 } }));
     const p = writePoints(pts, POINT_FIELDS, proj);
     files.push({ name: `${base}_points.shp`, data: p.shp }, { name: `${base}_points.shx`, data: p.shx }, { name: `${base}_points.dbf`, data: p.dbf }, { name: `${base}_points.prj`, data: prj }, { name: `${base}_points.cpg`, data: cpg });
   }
@@ -108,7 +112,7 @@ export function buildKml(project, mode) {
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${esc(project.name)} ${esc(project.year)}</name>
 <Style id="field"><LineStyle><color>ff3ad3f5</color><width>3</width></LineStyle><PolyStyle><color>333ad3f5</color></PolyStyle></Style>
-<Style id="slough"><LineStyle><color>fff0c85f</color><width>2</width></LineStyle><PolyStyle><color>66f0c85f</color></PolyStyle></Style>
+<Style id="obstacle"><LineStyle><color>fff0c85f</color><width>2</width></LineStyle><PolyStyle><color>66f0c85f</color></PolyStyle></Style>
 ${marks}
 </Document></kml>`;
   return { name: `${safeName(project.name)}_${project.year}.kml`, data: new TextEncoder().encode(kml), type: 'application/vnd.google-earth.kml+xml' };
@@ -153,10 +157,10 @@ async function importShapeZip(buf) {
   const out = [];
   polys.forEach((p, i) => {
     const a = p.attrs || {};
-    const type = String(a.TYPE || '').toLowerCase() === 'slough' ? 'slough' : 'field';
-    const name = a.PART || a.NAME || a.FIELD || a.Name || a.name || (type === 'field' ? `Field ${i + 1}` : `Slough ${i + 1}`);
+    const type = isObstacle(a.TYPE) ? 'slough' : 'field';
+    const name = a.PART || a.NAME || a.FIELD || a.Name || a.name || (type === 'field' ? `Field ${i + 1}` : `Obstacle ${i + 1}`);
     out.push({ name, type, ring: p.outer });
-    p.holes.forEach((h, k) => out.push({ name: `Slough ${k + 1}`, type: 'slough', ring: h }));
+    p.holes.forEach((h, k) => out.push({ name: `Obstacle ${k + 1}`, type: 'slough', ring: h }));
   });
   return out;
 }
@@ -170,11 +174,11 @@ function importKml(text) {
     for (const poly of pm.getElementsByTagName('Polygon')) {
       const outer = poly.getElementsByTagName('outerBoundaryIs')[0]?.getElementsByTagName('coordinates')[0];
       if (!outer) continue;
-      const isSlough = /slough/i.test(pm.getElementsByTagName('styleUrl')[0]?.textContent || '') || /slough/i.test(name || '');
-      out.push({ name: name || `Field ${out.length + 1}`, type: isSlough ? 'slough' : 'field', ring: dropClose(parse(outer)) });
+      const isObs = /slough|obstacle/i.test(pm.getElementsByTagName('styleUrl')[0]?.textContent || '') || /slough|obstacle/i.test(name || '');
+      out.push({ name: name || `Field ${out.length + 1}`, type: isObs ? 'slough' : 'field', ring: dropClose(parse(outer)) });
       [...poly.getElementsByTagName('innerBoundaryIs')].forEach((ib, k) => {
         const c = ib.getElementsByTagName('coordinates')[0];
-        if (c) out.push({ name: `Slough ${k + 1}`, type: 'slough', ring: dropClose(parse(c)) });
+        if (c) out.push({ name: `Obstacle ${k + 1}`, type: 'slough', ring: dropClose(parse(c)) });
       });
     }
   }
@@ -190,11 +194,11 @@ function importGeoJson(gj) {
     if (!g) continue;
     const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
     const props = f.properties || {};
-    const type = String(props.TYPE || props.type || '').toLowerCase() === 'slough' ? 'slough' : 'field';
+    const type = isObstacle(props.TYPE || props.type) ? 'slough' : 'field';
     for (const rings of polys) {
       const ll = rings.map((r) => dropClose(r.map(([lng, lat]) => [lat, lng])));
       out.push({ name: props.PART || props.NAME || props.name || `Field ${out.length + 1}`, type, ring: ll[0] });
-      ll.slice(1).forEach((h, k) => out.push({ name: `Slough ${k + 1}`, type: 'slough', ring: h }));
+      ll.slice(1).forEach((h, k) => out.push({ name: `Obstacle ${k + 1}`, type: 'slough', ring: h }));
     }
   }
   if (!out.length) throw new Error('No polygons found in the GeoJSON');

@@ -1,11 +1,11 @@
 {
   "name": "Bohn Ag Boundaries",
   "short_name": "Boundaries",
-  "description": "Draw or drive field boundaries and sloughs, see acres, export shapefiles.",
+  "description": "Draw or drive field boundaries and obstacles, see acres, export shapefiles.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#0f1108",
   "theme_color": "#0f1108",
   "icons": [

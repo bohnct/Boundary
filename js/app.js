@@ -18,13 +18,15 @@ const ICONS = {
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   nav: '<path d="M21 3 3 10.5l7.5 3L14 21z"/>',
   layers: '<path d="M12 3 2 8l10 5 10-5z"/><path d="m2 13 10 5 10-5"/>',
-  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/>',
+  rec: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5" fill="#ef4444" stroke="none"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
   poly: '<path d="M12 3 21 9.5 17.5 20h-11L3 9.5z"/>',
   move: '<path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/>',
   addpt: '<circle cx="9" cy="12" r="5"/><path d="M18 8v8M14 12h8"/>',
   rmpt: '<circle cx="9" cy="12" r="5"/><path d="M14 12h8"/>',
-  drop: '<path d="M12 3c3 4 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 3-7 6-11z"/>',
+  obstacle: '<path d="M8 4.5c3-1.5 7-1 9.5 1.5s3 6.5 1 9.5-5.5 5-9 4.5-6-3-6.5-6.5S5 6 8 4.5z"/>',
   split: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M12 2v20" stroke-dasharray="3 2"/>',
   pause: '<path d="M8 5v14M16 5v14" stroke-width="4"/>',
   play: '<path d="M7 4v16l13-8z"/>',
@@ -52,8 +54,9 @@ const unpackFix = (a) => ({ lat: a[0], lng: a[1], t: a[2], speed: a[3], heading:
 
 const S = {
   projects: load(STORE_KEY, []),
-  prefs: load(PREF_KEY, { offsetFt: 0, side: 'left', lastView: null, layer: 0 }),
+  prefs: load(PREF_KEY, { offsetFt: 0, side: 'left', lastView: null, layer: 'satellite', theme: 'night' }),
   current: null,
+  editing: false, // edit tools shown (Edit button on the rail)
   tool: 'move',
   selectedId: null,
   draw: null, // { type, pts }
@@ -145,7 +148,7 @@ function renderProjectList() {
     const nS = p.boundaries.filter((b) => b.type === 'slough').length;
     const card = document.createElement('div');
     card.className = 'proj-card';
-    card.innerHTML = `<button type="button" class="open">${thumbSvg(p)}<span class="meta"><span class="title"></span><span class="sub">${p.year} · ${nF} field${nF === 1 ? '' : 's'}${nS ? ` · ${nS} slough${nS === 1 ? '' : 's'}` : ''}</span></span><span class="ac"><b>${fmtAc(a.net)}</b><span>net ac</span></span></button><button type="button" class="more-btn" aria-label="Project options">⋯</button>`;
+    card.innerHTML = `<button type="button" class="open">${thumbSvg(p)}<span class="meta"><span class="title"></span><span class="sub">${p.year} · ${nF} field${nF === 1 ? '' : 's'}${nS ? ` · ${nS} obstacle${nS === 1 ? '' : 's'}` : ''}</span></span><span class="ac"><b>${fmtAc(a.net)}</b><span>net ac</span></span></button><button type="button" class="more-btn" aria-label="Project options">⋯</button>`;
     card.querySelector('.title').textContent = p.name;
     card.querySelector('.open').addEventListener('click', () => openProject(p.id));
     card.querySelector('.more-btn').addEventListener('click', () => openProjectActions(p));
@@ -225,31 +228,40 @@ $('#import-input').addEventListener('change', async (e) => {
   }
 });
 
+// ---------- theme ----------
+// prefs.theme: 'day' | 'night' | 'auto' (follows the phone). index.html sets it before first paint too.
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  const t = S.prefs.theme || 'night';
+  const dark = t === 'night' || (t === 'auto' && darkMq.matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#0f1108' : '#eef0e8';
+  setSeg('#theme-seg', t);
+}
+darkMq.addEventListener('change', applyTheme);
+wireSeg('#theme-seg', (v) => { S.prefs.theme = v; savePrefs(); applyTheme(); });
+applyTheme();
+
 // ---------- map ----------
+// prefs.layer: 'satellite' | 'none' (older versions stored a number; all of those had satellite).
+if (S.prefs.layer !== 'none') S.prefs.layer = 'satellite';
+const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 // crossOrigin makes tile responses readable (not opaque), so the service worker
 // caches their real size instead of a padded one that eats the storage quota.
-const TILE_OPTS = { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true };
-const LAYERS = [
-  { name: 'Satellite', make: () => [L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...TILE_OPTS, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' })] },
-  { name: 'Satellite + roads', make: () => [
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { ...TILE_OPTS, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' }),
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', TILE_OPTS),
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', TILE_OPTS),
-  ] },
-  { name: 'Street map', make: () => [L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { ...TILE_OPTS, attribution: '© OpenStreetMap contributors' })] },
-];
+const satLayer = L.tileLayer(SAT_URL, { maxNativeZoom: 19, maxZoom: 21, crossOrigin: true, attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' });
 
 const map = L.map('map', { zoomControl: false, attributionControl: true, tap: true, maxZoom: 21, preferCanvas: false }).setView([50.45, -104.6], 13);
-L.control.scale({ position: 'topright', imperial: true, metric: false }).addTo(map);
-let baseLayers = [];
-function setLayer(i) {
-  baseLayers.forEach((l) => map.removeLayer(l));
-  S.prefs.layer = i;
-  baseLayers = LAYERS[i].make();
-  baseLayers.forEach((l) => l.addTo(map));
+// Layer None: plain background (CSS --map-blank) with a faint grid that pans with the map.
+const BlankGrid = L.GridLayer.extend({ createTile() { const d = document.createElement('div'); d.className = 'blank-tile'; return d; } });
+const gridLayer = new BlankGrid({ tileSize: 128, maxZoom: 21 });
+function setLayer(name) {
+  S.prefs.layer = name;
+  if (name === 'satellite') { gridLayer.remove(); satLayer.addTo(map); } else { satLayer.remove(); gridLayer.addTo(map); }
+  $('#screen-map').classList.toggle('layer-none', name === 'none');
+  setSeg('#layer-seg', name);
   savePrefs();
 }
-setLayer(S.prefs.layer || 0);
+setLayer(S.prefs.layer);
 const canvas = L.canvas({ padding: 0.3 });
 const gShapes = L.layerGroup().addTo(map);
 const gEdit = L.layerGroup().addTo(map);
@@ -259,15 +271,29 @@ let meMarker = null;
 
 map.on('moveend', () => { S.prefs.lastView = { c: map.getCenter(), z: map.getZoom() }; savePrefs(); });
 
-$('#btn-layers').addEventListener('click', () => {
-  const i = ((S.prefs.layer || 0) + 1) % LAYERS.length;
-  setLayer(i);
-  const lbl = $('#layer-label');
-  lbl.textContent = LAYERS[i].name;
-  lbl.hidden = false;
-  clearTimeout(lbl._t);
-  lbl._t = setTimeout(() => { lbl.hidden = true; }, 1500);
-});
+// ---------- top panels (layers, view settings) ----------
+let openPanel = null; // 'layers' | 'view' | null
+function togglePanel(name) {
+  openPanel = openPanel === name ? null : name;
+  for (const [n, panel, btn] of [['layers', '#panel-layers', '#btn-layers'], ['view', '#panel-view', '#btn-view']]) {
+    $(panel).hidden = openPanel !== n;
+    $(btn).classList.toggle('open', openPanel === n);
+    $(btn).setAttribute('aria-expanded', String(openPanel === n));
+  }
+  $('#screen-map').classList.toggle('panel-open', !!openPanel);
+  if (openPanel === 'layers') updateSatThumb();
+}
+const closePanel = () => { if (openPanel) togglePanel(openPanel); };
+$('#btn-layers').addEventListener('click', () => togglePanel('layers'));
+$('#btn-view').addEventListener('click', () => togglePanel('view'));
+wireSeg('#layer-seg', setLayer);
+
+// Thumbnail of the imagery around the current map centre.
+function updateSatThumb() {
+  const z = Math.max(3, Math.min(17, map.getZoom() - 1));
+  const t = map.project(map.getCenter(), z).divideBy(256).floor();
+  $('#thumb-sat').style.backgroundImage = `url("${L.Util.template(SAT_URL, { z, x: t.x, y: t.y })}")`;
+}
 
 const geo = new URLSearchParams(location.search).has('sim') ? startSimulator(map, new URLSearchParams(location.search).get('sim')) : navigator.geolocation;
 
@@ -287,6 +313,7 @@ $('#btn-locate').addEventListener('click', () => locate());
 $('#btn-home').addEventListener('click', () => {
   if (S.drive) return toast('Finish or discard the drive first');
   cancelDraw();
+  closePanel();
   showProjects();
 });
 
@@ -299,8 +326,7 @@ function openProject(id, opts = {}) {
   $('#screen-projects').classList.add('hidden');
   $('#screen-map').classList.remove('hidden');
   map.invalidateSize();
-  setTool('move');
-  render();
+  setEditing(false);
   const pts = S.current.boundaries.flatMap((b) => b.ring);
   if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60] });
   else if (S.prefs.lastView) map.setView(S.prefs.lastView.c, S.prefs.lastView.z);
@@ -321,12 +347,28 @@ $('#btn-undo').addEventListener('click', () => {
   render();
 });
 
+// Keyboard on a PC / iPad keyboard: Esc backs out of whatever is open, Ctrl/Cmd+Z undoes while editing.
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest?.('input, textarea, select')) return;
+  if (e.key === 'Escape') {
+    if (openSheetEl) closeSheet();
+    else if (openPanel) closePanel();
+    else if (S.draw || S.split) cancelDraw();
+    else if (S.current && S.selectedId) { S.selectedId = null; render(); }
+  } else if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey && S.editing && !S.drive && !openSheetEl) {
+    e.preventDefault();
+    $('#btn-undo').click();
+  }
+});
+
 const selected = () => S.current?.boundaries.find((b) => b.id === S.selectedId) || null;
 
 // ---------- rendering ----------
+// Boundary type 'slough' is shown as "Obstacle" (sloughs, tree bluffs, yards…).
+// The stored value stays 'slough' so saved projects keep working.
 const STYLE = {
-  field: { color: '#f5d33a', weight: 3, fillColor: '#f5d33a', fillOpacity: 0.12 },
-  slough: { color: '#5fc8f0', weight: 2.5, fillColor: '#2f6d8a', fillOpacity: 0.6 },
+  field: { color: '#f5d33a', weight: 3, fillColor: '#f5d33a', fillOpacity: 0.12, className: 'bnd-field' },
+  slough: { color: '#5fc8f0', weight: 2.5, fillColor: '#2f6d8a', fillOpacity: 0.6, className: 'bnd-slough' },
 };
 let shapeLayers = new Map();
 
@@ -372,7 +414,7 @@ function vxIcon(cls) { return L.divIcon({ className: `vx ${cls}`, html: '<i></i>
 function renderEditHandles() {
   gEdit.clearLayers();
   const b = selected();
-  if (!b || S.draw || S.split || S.drive) return;
+  if (!b || !S.editing || S.draw || S.split || S.drive) return;
   const poly = shapeLayers.get(b.id);
   // Only show handles at least ~20 px apart at this zoom; zoom in to reach the rest.
   const shown = new Set();
@@ -420,10 +462,20 @@ function updateAreaChip() {
   const a = computeAreas(p);
   $('#chip-label').textContent = `${p.name} ${p.year} · net`;
   $('#chip-net').textContent = `${fmtAc(a.net)} ac`;
-  $('#chip-sub').textContent = a.slough > 0 ? `${fmtAc(a.gross)} gross − ${fmtAc(a.slough)} slough` : `${a.perField.length} field${a.perField.length === 1 ? '' : 's'}`;
+  $('#chip-sub').textContent = a.slough > 0 ? `${fmtAc(a.gross)} gross − ${fmtAc(a.slough)} obstacles` : `${a.perField.length} field${a.perField.length === 1 ? '' : 's'}`;
 }
 
 // ---------- tools ----------
+// Outside edit mode the toolbar and undo are hidden and taps only select (highlight) a boundary.
+function setEditing(on) {
+  S.editing = on;
+  $('#screen-map').classList.toggle('editing', on);
+  $('#btn-edit').classList.toggle('open', on);
+  $('#btn-edit').setAttribute('aria-pressed', String(on));
+  setTool('move');
+}
+$('#btn-edit').addEventListener('click', () => setEditing(!S.editing));
+
 $('#toolbar').addEventListener('click', (e) => {
   const t = e.target.closest('[data-tool]')?.dataset.tool;
   if (t) setTool(t);
@@ -450,6 +502,8 @@ function cancelDraw(reRender = true) {
   S.split = null;
   gDraw.clearLayers();
   $('#draw-bar').hidden = true;
+  $('#screen-map').classList.remove('placing');
+  map.doubleClickZoom.enable();
   if (reRender && S.current) { S.tool = 'move'; $$('#toolbar [data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === 'move'))); render(); }
 }
 
@@ -457,9 +511,10 @@ function updateHint() {
   const h = $('#hint');
   const b = selected();
   let msg = '';
-  if (S.draw) msg = S.draw.pts.length < 3 ? `Tap the map to place ${S.draw.type === 'slough' ? 'slough' : 'field'} corners (${S.draw.pts.length} so far). You need at least 3.` : 'Keep tapping to add corners, then tap Done.';
+  if (S.draw) msg = S.draw.pts.length < 3 ? `Tap the map to place ${S.draw.type === 'slough' ? 'obstacle' : 'field'} corners (${S.draw.pts.length} so far). You need at least 3.` : 'Keep tapping to add corners, then tap Done.';
   else if (S.tool === 'split') msg = !S.split ? 'Tap the field you want to split.' : S.split.pts.length < 2 ? 'Tap two points to draw the split line across the field.' : 'Tap Done to split the field along the line.';
-  else if (!S.current.boundaries.length) msg = 'Draw a boundary with the Boundary tool, or tap GPS to drive one.';
+  else if (!S.current.boundaries.length) msg = S.editing ? 'Draw a boundary with the Boundary tool.' : 'Tap the pencil to draw a boundary, or the record button to drive one.';
+  else if (!S.editing) msg = '';
   else if (!b) msg = S.tool === 'move' ? 'Tap a boundary to edit its points.' : 'Tap a boundary first.';
   else if (S.tool === 'move') msg = `Drag a white point to move it. Selected: ${b.name}.`;
   else if (S.tool === 'add') msg = 'Tap a small yellow point to add a corner there.';
@@ -468,11 +523,12 @@ function updateHint() {
 }
 
 function onShapeTap(b, latlng) {
+  if (openPanel) return closePanel(); // a tap outside an open panel just closes it
   if (S.drive) return;
   if (S.draw) return onMapTap(latlng);
   if (S.tool === 'split') {
     if (S.split) return onMapTap(latlng);
-    if (b.type !== 'field') return toast('Tap a field, not a slough');
+    if (b.type !== 'field') return toast('Tap a field, not an obstacle');
     S.selectedId = b.id;
     S.split = { fieldId: b.id, pts: [] };
     render();
@@ -495,11 +551,15 @@ function onMapTap(latlng) {
   }
   if (S.selectedId) { S.selectedId = null; render(); }
 }
-map.on('click', (e) => onMapTap(e.latlng));
+map.on('click', (e) => { if (openPanel) closePanel(); else onMapTap(e.latlng); });
 map.on('zoomend', () => { if (S.current && S.selectedId && !S.drive) renderEditHandles(); });
 
 function renderDraw() {
   gDraw.clearLayers();
+  // While placing points, quick taps/clicks must not double-tap zoom; crosshair cursor on PC.
+  const placing = !!(S.draw || S.split);
+  $('#screen-map').classList.toggle('placing', placing);
+  if (placing) map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
   const bar = $('#draw-bar');
   if (S.draw) {
     bar.hidden = false;
@@ -527,7 +587,7 @@ $('#draw-done').addEventListener('click', () => {
     if (S.draw.pts.length < 3) return;
     pushHistory();
     const n = S.current.boundaries.filter((b) => b.type === S.draw.type).length + 1;
-    const b = { id: uid(), name: S.draw.type === 'slough' ? `Slough ${n}` : `Field ${n}`, type: S.draw.type, ring: S.draw.pts };
+    const b = { id: uid(), name: S.draw.type === 'slough' ? `Obstacle ${n}` : `Field ${n}`, type: S.draw.type, ring: S.draw.pts };
     S.current.boundaries.push(b);
     saveProjects();
     cancelDraw();
@@ -551,7 +611,7 @@ $('#draw-done').addEventListener('click', () => {
 });
 
 // ---------- boundaries sheet ----------
-$('#btn-list').addEventListener('click', openBoundaries);
+$('#area-chip').addEventListener('click', openBoundaries);
 function openBoundaries() {
   const p = S.current;
   const a = computeAreas(p);
@@ -566,15 +626,15 @@ function openBoundaries() {
     r.querySelector('b').textContent = b.name;
     r.querySelector('small').textContent = sub;
     r.querySelector('.area').textContent = area;
-    r.querySelector('.sel').addEventListener('click', () => { closeSheet(); S.selectedId = b.id; if (S.tool !== 'move' && S.tool !== 'add' && S.tool !== 'remove') setTool('move'); render(); map.fitBounds(L.latLngBounds(b.ring), { padding: [80, 80] }); });
+    r.querySelector('.sel').addEventListener('click', () => { closeSheet(); if (S.draw || S.split) setTool('move'); S.selectedId = b.id; render(); map.fitBounds(L.latLngBounds(b.ring), { padding: [80, 80] }); });
     r.querySelector('.more-btn').addEventListener('click', () => openBoundaryEdit(b));
     list.appendChild(r);
   };
   for (const pf of a.perField) {
     row(pf.field, `${fmtAc(pf.gross)} ac`, false, `Field · ${pf.field.ring.length} points${pf.field.drive ? ' · GPS' : ''}`);
-    for (const s of pf.sloughs) row(s, `− ${fmtAc(acres(s.ring))} ac`, true, 'Slough');
+    for (const s of pf.sloughs) row(s, `− ${fmtAc(acres(s.ring))} ac`, true, 'Obstacle');
   }
-  for (const s of a.loose) row(s, `${fmtAc(acres(s.ring))} ac`, false, 'Slough · outside any field');
+  for (const s of a.loose) row(s, `${fmtAc(acres(s.ring))} ac`, false, 'Obstacle · outside any field');
   if (!p.boundaries.length) list.innerHTML = '<div class="b-empty">No boundaries yet.</div>';
   $('#t-gross').textContent = fmtAc(a.gross);
   $('#t-slough').textContent = fmtAc(a.slough);
@@ -582,9 +642,8 @@ function openBoundaries() {
   openSheet('#sheet-boundaries');
 }
 $('#sb-edit').addEventListener('click', () => openProjectForm(S.current));
-$('#sb-add-field').addEventListener('click', () => { closeSheet(); setTool('boundary'); });
-$('#sb-add-slough').addEventListener('click', () => { closeSheet(); setTool('slough'); });
-$('#sb-drive').addEventListener('click', () => openDriveSetup());
+$('#sb-add-field').addEventListener('click', () => { closeSheet(); if (!S.editing) setEditing(true); setTool('boundary'); });
+$('#sb-add-slough').addEventListener('click', () => { closeSheet(); if (!S.editing) setEditing(true); setTool('slough'); });
 $('#sb-export').addEventListener('click', () => openExport());
 
 // ---------- boundary edit ----------
@@ -651,7 +710,7 @@ function openDriveSetup() {
 }
 wireSeg('#sd-type', (v) => {
   const n = S.current.boundaries.filter((b) => b.type === v).length + 1;
-  $('#form-drive').name.value = v === 'slough' ? `Slough ${n}` : `Field ${n}`;
+  $('#form-drive').name.value = v === 'slough' ? `Obstacle ${n}` : `Field ${n}`;
 });
 wireSeg('#sd-side');
 $('#sd-off-minus').addEventListener('click', () => { sdOffFt = Math.max(0, sdOffFt - 1); $('#sd-off-val').textContent = sdOffFt; });
@@ -661,7 +720,7 @@ $('#form-drive').addEventListener('submit', (e) => {
   const side = segValue('#sd-side') || 'left';
   S.prefs.offsetFt = sdOffFt; S.prefs.side = side; savePrefs();
   closeSheet();
-  startDrive({ projectId: S.current.id, type: segValue('#sd-type') || 'field', name: e.target.name.value.trim() || 'Field', offsetFt: sdOffFt, side, fixes: [], paused: false });
+  startDrive({ projectId: S.current.id, type: segValue('#sd-type') || 'field', name: e.target.name.value.trim() || 'Field', offsetFt: sdOffFt, side, fixes: [], paused: false, startedAt: Date.now() });
 });
 
 const D = { watchId: null, wakeLock: null, raw: null, dots: null, frozen: null, live: null, truck: null, frozenUpto: 0, follow: true, lastSaved: 0, lastPos: null };
@@ -675,14 +734,14 @@ function startDrive(state) {
   S.selectedId = null;
   render();
   $('#screen-map').classList.add('driving');
-  $('#drive-title').textContent = `Recording · ${S.current.name} ${S.current.year} · ${state.name}`;
+  $('#drive-title').textContent = `${S.current.name} ${S.current.year} · ${state.name}`;
   $('#off-val').textContent = state.offsetFt;
   setSeg('#side-seg', state.side);
   $('#offset-panel').hidden = false;
   D.raw = L.polyline([], { color: '#4da3ff', weight: 2.5, interactive: false, renderer: canvas }).addTo(gDrive);
   D.dots = L.layerGroup().addTo(gDrive);
   D.frozen = L.layerGroup().addTo(gDrive);
-  D.live = L.polyline([], { color: '#f5d33a', weight: 3.5, interactive: false }).addTo(gDrive);
+  D.live = L.polyline([], { color: '#f5d33a', weight: 3.5, interactive: false, className: 'bnd-field' }).addTo(gDrive);
   D.frozenUpto = 0;
   D.follow = true;
   $('#drv-follow').classList.add('on');
@@ -690,6 +749,11 @@ function startDrive(state) {
   fixes.forEach((f) => addDot(f));
   D.raw.setLatLngs(fixes.map((f) => [f.lat, f.lng]));
   D._fixes = fixes;
+  D.distM = fixes.reduce((s, f, i) => (i ? s + distanceM([fixes[i - 1].lat, fixes[i - 1].lng], [f.lat, f.lng]) : 0), 0);
+  updateTrackStats();
+  clearInterval(D.clock);
+  D.clock = setInterval(updateClock, 1000);
+  updateClock();
   refreshPreview(true);
   setPausedUi();
   D.watchId = geo.watchPosition(onFix, (err) => toast(geoErrText(err)), { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
@@ -724,8 +788,10 @@ function onFix(pos) {
   if (S.drive.paused) return;
   if (f.acc != null && f.acc > 30) return; // too poor to use
   if (prev && f.t <= prev.t) return;
+  if (prev) D.distM += distanceM([prev.lat, prev.lng], [f.lat, f.lng]);
   D._fixes.push(f);
   S.drive.fixes.push(packFix(f));
+  updateTrackStats();
   D.raw.addLatLng([f.lat, f.lng]);
   addDot(f);
   refreshPreview();
@@ -740,7 +806,7 @@ function refreshPreview(reset = false) {
   while (D.frozenUpto + CHUNK + 2 <= fx.length) {
     const s = Math.max(0, D.frozenUpto - 1);
     const line = buildBoundary(fx.slice(s, D.frozenUpto + CHUNK + 2), opts).line;
-    L.polyline(line, { color: '#f5d33a', weight: 3.5, interactive: false }).addTo(D.frozen);
+    L.polyline(line, { color: '#f5d33a', weight: 3.5, interactive: false, className: 'bnd-field' }).addTo(D.frozen);
     D.frozenUpto += CHUNK;
   }
   D.live.setLatLngs(buildBoundary(fx.slice(Math.max(0, D.frozenUpto - 1)), opts).line);
@@ -755,6 +821,24 @@ function updateStats(f) {
   const span = (now - D._times[0]) / 1000;
   $('#st-rate').textContent = D._times.length > 1 && span > 0 ? `${((D._times.length - 1) / span).toFixed(1)} Hz` : '–';
   $('#st-acc').textContent = f.acc == null ? '–' : `± ${Math.round(f.acc / FT)} ft`;
+  $('#st-acc').classList.toggle('warn', f.acc != null && f.acc > 5); // worse than ~16 ft
+  const moving = f.speed != null && f.speed > 0.5 && f.heading != null && !Number.isNaN(f.heading);
+  $('#st-heading').textContent = moving ? `${['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(f.heading / 45) % 8]} ${Math.round(f.heading)}°` : '–';
+}
+
+function updateTrackStats() {
+  $('#st-points').textContent = S.drive.fixes.length.toLocaleString('en-CA');
+  const km = D.distM / 1000;
+  $('#st-dist').textContent = `${km.toFixed(km < 10 ? 2 : 1)} km`;
+}
+
+// Elapsed time since the drive started (older saved drives: since the first fix).
+function updateClock() {
+  if (!S.drive) return;
+  const t0 = S.drive.startedAt || S.drive.fixes[0]?.[2] || Date.now();
+  const s = Math.max(0, Math.floor((Date.now() - t0) / 1000));
+  const hh = Math.floor(s / 3600), mm = Math.floor(s / 60) % 60, ss = String(s % 60).padStart(2, '0');
+  $('#st-time').textContent = hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
 }
 
 function persistDrive(force = false) {
@@ -769,6 +853,7 @@ function setPausedUi() {
   $('#drv-pause-lbl').textContent = p ? 'Resume' : 'Pause';
   $('#drv-pause .ico').innerHTML = svgIcon(p ? 'play' : 'pause');
   $('#rec-dot').classList.toggle('paused', !!p);
+  $('#drive-state').textContent = p ? 'PAUSED' : 'REC';
 }
 
 async function requestWakeLock() {
@@ -791,6 +876,7 @@ function stopDrive() {
   D.wakeLock = null;
   gDrive.clearLayers();
   D.truck = null;
+  clearInterval(D.clock);
   D.lastPos = null;
   D._times = [];
   D._lastHeading = null;
@@ -882,7 +968,9 @@ $('#form-export').addEventListener('submit', async (e) => {
 
 async function shareOrDownload({ name, data, type }) {
   const file = new File([data], name, { type });
-  if (navigator.canShare?.({ files: [file] }) && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
+  // Share sheet on phones and tablets (iPad Safari reports itself as a Mac, but has touch).
+  const mobile = /iPhone|iPad|Android/i.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  if (navigator.canShare?.({ files: [file] }) && mobile) {
     try { await navigator.share({ files: [file], title: name }); return; } catch (err) { if (err.name === 'AbortError') return; }
   }
   const url = URL.createObjectURL(file);

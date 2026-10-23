@@ -4,7 +4,7 @@ const fs = typeof process !== 'undefined' && process.versions?.node ? await impo
 fs?.mkdirSync('tests/out', { recursive: true });
 const writeFileSync = (path, data) => fs?.writeFileSync(path, data);
 import { makeProjector, acres, buildBoundary, splitRing, toUTM, fromUTM } from '../js/geo.js';
-import { buildShapefileZip, buildGeoJson, buildKml, computeAreas } from '../js/formats.js';
+import { buildShapefileZip, buildGeoJson, buildKml, computeAreas, exportFeatures } from '../js/formats.js';
 import { readZip } from '../js/zip.js';
 import { readPolygons } from '../js/shapefile.js';
 
@@ -92,6 +92,7 @@ const project = { id: 't', name: 'Home Quarter', year: 2026, boundaries: [
 ] };
 const a = computeAreas(project);
 check('net = gross - slough', Math.abs(a.net - (160 - 10000 / 4046.8564224)) < 0.05, `${a.net.toFixed(3)}`);
+check('exported TYPE is field/obstacle', exportFeatures(project, 'separate').map((f) => f.attrs.TYPE).join() === 'field,obstacle');
 for (const [mode, kind] of [['cutout', 'wgs84'], ['separate', 'utm']]) {
   const z = buildShapefileZip(project, { mode, points: true, projection: kind === 'utm' ? { kind, zone: 13 } : { kind } });
   writeFileSync(`tests/out/${mode}_${kind}.zip`, z.data);
@@ -99,7 +100,8 @@ for (const [mode, kind] of [['cutout', 'wgs84'], ['separate', 'utm']]) {
   const shp = Object.keys(files).find((n) => n.endsWith('.shp') && !n.includes('_points'));
   const polys = readPolygons(files[shp], files[shp.replace('.shp', '.dbf')], new TextDecoder().decode(files[shp.replace('.shp', '.prj')]));
   const outer = polys[0].outer;
-  check(`${mode}/${kind}: round-trip import`, polys.length === (mode === 'cutout' ? 1 : 2) && Math.abs(acres(outer) - 160) < 0.05 && (mode !== 'cutout' || polys[0].holes.length === 1), `${polys.length} polys, ${acres(outer).toFixed(3)} ac`);
+  check(`${mode}/${kind}: round-trip import`, polys.length === (mode === 'cutout' ? 1 : 2) && Math.abs(acres(outer) - 160) < 0.05 && (mode !== 'cutout' || polys[0].holes.length === 1)
+    && (mode !== 'separate' || polys[1].attrs.TYPE === 'obstacle'), `${polys.length} polys, ${acres(outer).toFixed(3)} ac`);
 }
 writeFileSync('tests/out/project.geojson', buildGeoJson(project, 'cutout').data);
 writeFileSync('tests/out/project.kml', buildKml(project, 'cutout').data);

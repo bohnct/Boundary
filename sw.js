@@ -1,5 +1,5 @@
 // App shell is cached for offline use; map tiles are cached as you view them.
-const VERSION = 'v2';
+const VERSION = 'v4';
 const SHELL = `shell-${VERSION}`;
 const TILES = 'tiles-v2'; // v1 held opaque tiles, which CORS tile requests can't use
 const MAX_TILES = 3000;
@@ -23,7 +23,7 @@ async function trimTiles(c) {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
-  if (/arcgisonline\.com|tile\.openstreetmap\.org/.test(url.host)) {
+  if (/arcgisonline\.com$/.test(url.host)) {
     e.respondWith(caches.open(TILES).then(async (c) => {
       const hit = await c.match(e.request);
       if (hit) return hit;
