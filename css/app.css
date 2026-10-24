@@ -56,18 +56,21 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, "Helvetica Neue", Segoe UI, sans-serif; overscroll-behavior: none; }
 body { position: fixed; inset: 0; overflow: hidden; }
-/* iOS home-screen app with the see-through status bar: the page is told the screen is shorter
-   than it is (by the status bar's height), so anything sized to it stops short and leaves a black
-   strip at the bottom (100% and 100vh included). Only 100lvh is the real screen height there, so
-   the page is a fixed layer of exactly that height. Browser tabs: unchanged. (Same fix as the
-   owner's Terrain & Drainage tool.) */
+/* iOS home-screen app. With the see-through status bar the page starts under the clock but is told
+   the screen is shorter by the status bar's height (100% and 100vh included), leaving a black strip
+   at the bottom. With a solid status bar the page starts below it and 100% is right. So: the
+   reported height plus whatever sits behind the status bar (safe-area top: 59 pt see-through, 0
+   solid), never taller than the real screen (100lvh). Browser tabs: unchanged. (Same problem the
+   owner's Terrain & Drainage tool solves with 100lvh.) */
+@media (display-mode: standalone) {
+  body { bottom: auto; height: calc(100% + env(safe-area-inset-top, 0px)); }
+}
+html.standalone body { bottom: auto; height: calc(100% + env(safe-area-inset-top, 0px)); }
 @supports (height: 100lvh) {
   @media (display-mode: standalone) {
-    html { height: 100lvh; }
-    body { bottom: auto; height: 100lvh; }
+    body { height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
   }
-  html.standalone { height: 100lvh; }
-  html.standalone body { bottom: auto; height: 100lvh; }
+  html.standalone body { height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
 }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }

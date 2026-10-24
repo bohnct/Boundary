@@ -8,7 +8,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
 // Shown on the Projects screen so you can tell an updated copy has loaded.
 // Keep in step with VERSION in sw.js (bump both when shipping).
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -293,8 +293,12 @@ function togglePanel(name) {
 function updateDiag() {
   const cs = getComputedStyle($('#safe-probe'));
   const vv = window.visualViewport;
+  const safeTop = parseFloat(cs.paddingTop);
   $('#diag').textContent = [
+    `v${APP_VERSION}`,
     `app ${document.documentElement.classList.contains('standalone') ? 'home-screen' : 'browser'}`,
+    // Portrait: the page only reaches under the clock with the see-through status bar.
+    innerHeight > innerWidth ? `bar ${safeTop > 0 ? 'see-through' : 'solid'}` : '',
     `window ${innerWidth}×${innerHeight}`,
     `screen ${screen.width}×${screen.height}`,
     vv ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)}` : '',
