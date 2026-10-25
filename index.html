@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0f1108">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="css/app.css?v=19"><!-- ?v= keeps page, styles and script from the same version; bump with APP_VERSION -->
+<link rel="stylesheet" href="css/app.css?v=20"><!-- ?v= keeps page, styles and script from the same version; bump with APP_VERSION -->
 <script>/* home-screen app? */ if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) document.documentElement.classList.add('standalone');</script>
 <script>/* set the theme before first paint */ try { var t = (JSON.parse(localStorage.getItem('bab.prefs.v1')) || {}).theme || 'night'; document.documentElement.dataset.theme = t === 'day' || (t === 'auto' && !matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark'; } catch (e) { document.documentElement.dataset.theme = 'dark'; }</script>
 </head>
@@ -263,9 +263,20 @@
   </form>
 </div>
 
+<!-- Yes/no questions (discard drive, delete…) in the app's own sheet style; see ask() in app.js -->
+<div class="sheet" id="sheet-confirm" hidden role="alertdialog" aria-labelledby="sc-title" aria-describedby="sc-msg">
+  <div class="grab"></div>
+  <h2 id="sc-title"></h2>
+  <p class="muted" id="sc-msg"></p>
+  <div class="btn-row">
+    <button type="button" class="pill" id="sc-cancel">Cancel</button>
+    <button type="button" class="pill primary" id="sc-ok">OK</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script type="module" src="js/app.js?v=19"></script>
+<script type="module" src="js/app.js?v=20"></script>
 </body>
 </html>

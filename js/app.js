@@ -8,7 +8,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const FT = 0.3048;
 // Shown on the Projects screen so you can tell an updated copy has loaded.
 // Keep in step with VERSION in sw.js (bump both when shipping).
-const APP_VERSION = 19;
+const APP_VERSION = 20;
 const STORE_KEY = 'bab.projects.v1';
 const DRIVE_KEY = 'bab.drive.v1';
 const PREF_KEY = 'bab.prefs.v1';
@@ -80,10 +80,23 @@ function saveProjects(now = false) {
 const savePrefs = () => store(PREF_KEY, S.prefs);
 
 // ---------- toast ----------
+// Short messages sit in clear space for the screen they appear on, never over the controls:
+// below the GPS card while driving, below the eye panel or acres card on the map (between the
+// side buttons), and at the bottom of the Projects screen.
 let toastTimer;
 function toast(msg, ms = 2600) {
   const t = $('#toast');
   t.textContent = msg;
+  t.classList.remove('wide', 'at-bottom');
+  t.style.top = '';
+  if ($('#screen-map').classList.contains('hidden')) {
+    t.classList.add('at-bottom');
+  } else {
+    const driving = $('#screen-map').classList.contains('driving');
+    const anchor = driving ? $('#drive-stats') : !$('#panel-view').hidden ? $('#panel-view') : $('#area-chip');
+    t.classList.toggle('wide', driving);
+    t.style.top = `${anchor.getBoundingClientRect().bottom + 10}px`;
+  }
   t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
@@ -98,10 +111,36 @@ function openSheet(id) {
   $('#scrim').hidden = false;
 }
 function closeSheet() {
+  // Closing a question any other way (scrim, Esc, another sheet) counts as Cancel.
+  if (askDone && openSheetEl?.id === 'sheet-confirm') { const done = askDone; askDone = null; done(false); }
   if (openSheetEl) openSheetEl.hidden = true;
   openSheetEl = null;
   $('#scrim').hidden = true;
 }
+
+// Yes/no question in the app's own sheet (the browser's confirm() looks nothing like the app).
+// Resolves true for the main button, false for Cancel or closing it.
+let askDone = null;
+function ask({ title, message = '', ok = 'OK', cancel = 'Cancel', danger = false }) {
+  return new Promise((resolve) => {
+    $('#sc-title').textContent = title;
+    $('#sc-msg').textContent = message;
+    $('#sc-msg').hidden = !message;
+    $('#sc-ok').textContent = ok;
+    $('#sc-ok').className = `pill ${danger ? 'danger-fill' : 'primary'}`;
+    $('#sc-cancel').textContent = cancel;
+    openSheet('#sheet-confirm');
+    askDone = resolve;
+  });
+}
+function answer(yes) {
+  const done = askDone;
+  askDone = null;
+  closeSheet();
+  done?.(yes);
+}
+$('#sc-ok').addEventListener('click', () => answer(true));
+$('#sc-cancel').addEventListener('click', () => answer(false));
 $('#scrim').addEventListener('click', closeSheet);
 document.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeSheet(); });
 
@@ -168,7 +207,7 @@ function openProjectActions(p) {
   $('#sa-title').textContent = `${p.name} ${p.year}`;
   openSheet('#sheet-actions');
 }
-$('#sheet-actions').addEventListener('click', (e) => {
+$('#sheet-actions').addEventListener('click', async (e) => {
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (!act || !actionProject) return;
   const p = actionProject;
@@ -180,7 +219,7 @@ $('#sheet-actions').addEventListener('click', (e) => {
     S.projects.push(copy); saveProjects(true); closeSheet(); renderProjectList();
   }
   if (act === 'delete') {
-    if (!confirm(`Delete "${p.name} ${p.year}"? This can't be undone.`)) return;
+    if (!(await ask({ title: `Delete ${p.name} ${p.year}?`, message: "Its boundaries are removed from this device. This can't be undone.", ok: 'Delete', danger: true }))) return;
     S.projects = S.projects.filter((x) => x.id !== p.id);
     saveProjects(true); closeSheet(); renderProjectList();
   }
@@ -709,8 +748,10 @@ $('#form-bedit').addEventListener('submit', (e) => {
   closeSheet();
   render();
 });
-$('#be-delete').addEventListener('click', () => {
-  if (!confirm(`Delete ${beTarget.name}?`)) return;
+$('#be-delete').addEventListener('click', async () => {
+  const b = beTarget;
+  if (!(await ask({ title: `Delete ${b.name}?`, message: 'You can bring it back with Undo.', ok: 'Delete', danger: true }))) return;
+  beTarget = b;
   pushHistory();
   S.current.boundaries = S.current.boundaries.filter((x) => x !== beTarget);
   if (S.selectedId === beTarget.id) S.selectedId = null;
@@ -999,8 +1040,10 @@ function onMapResized() {
 new ResizeObserver(onMapResized).observe(map.getContainer());
 // Backup for iOS finishing its rotation layout late.
 window.addEventListener('orientationchange', () => setTimeout(onMapResized, 400));
-$('#drv-cancel').addEventListener('click', () => {
-  if (S.drive.fixes.length > 5 && !confirm('Discard this drive? The recorded GPS points will be lost.')) return;
+$('#drv-cancel').addEventListener('click', async () => {
+  const n = S.drive.fixes.length;
+  if (n > 5 && !(await ask({ title: 'Discard this drive?', message: `The ${n.toLocaleString('en-CA')} GPS points recorded so far will be lost.`, ok: 'Discard', cancel: 'Keep driving', danger: true }))) return;
+  if (!S.drive) return;
   stopDrive();
   render();
 });
@@ -1088,8 +1131,8 @@ $('#app-version').textContent = `Version ${APP_VERSION}`;
 const pendingDrive = load(DRIVE_KEY, null);
 if (pendingDrive && S.projects.some((p) => p.id === pendingDrive.projectId)) {
   openProject(pendingDrive.projectId);
-  if (confirm(`Resume the GPS drive in progress (${pendingDrive.fixes.length} points recorded)?`)) startDrive(pendingDrive);
-  else { try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ } }
+  ask({ title: 'Resume the GPS drive?', message: `A drive was still recording when the app closed (${pendingDrive.fixes.length.toLocaleString('en-CA')} points).`, ok: 'Resume', cancel: 'Discard it' })
+    .then((yes) => { if (yes) startDrive(pendingDrive); else { try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ } } });
 } else {
   // A saved drive whose project was deleted can never be resumed.
   if (pendingDrive) { try { localStorage.removeItem(DRIVE_KEY); } catch { /* ignore */ } }

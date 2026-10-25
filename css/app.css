@@ -229,6 +229,7 @@ h2 { font-size: 19px; font-weight: 800; }
 .pill { height: 50px; border-radius: 14px; background: var(--card); border: 1.5px solid var(--line-2); font-size: 15px; font-weight: 700; padding: 0 14px; color: var(--text); }
 .pill.primary { background: var(--sel); border-color: var(--sel); color: var(--sel-ink); font-weight: 800; }
 .pill.danger { color: var(--danger); }
+.pill.danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 800; }
 .pill:disabled { opacity: 0.45; }
 .action-list { display: flex; flex-direction: column; gap: 8px; }
 .action { height: 52px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); font-size: 16px; font-weight: 700; text-align: left; padding: 0 16px; }
@@ -266,7 +267,10 @@ h2 { font-size: 19px; font-weight: 800; }
 .check-row small { color: var(--muted); font-size: 12px; }
 .file-note { padding: 12px 14px; border-radius: 12px; background: var(--inset); font-size: 13px; color: var(--inset-text); word-break: break-all; }
 
-.toast { position: absolute; z-index: 2000; left: 50%; transform: translateX(-50%); top: calc(var(--safe-t) + 84px); max-width: 90%; padding: 10px 16px; border-radius: 12px; background: #000; color: #fff; border: 1px solid var(--line-2); font-size: 14px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+/* Short messages: same panel look as the app's cards; JS (toast()) sets top to clear space. */
+.toast { position: absolute; z-index: 2000; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 152px); padding: 10px 14px; border-radius: 14px; background: var(--panel); color: var(--text); border: 1.5px solid var(--border); font-size: 14px; font-weight: 600; line-height: 19px; text-align: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); pointer-events: none; }
+.toast.wide { max-width: calc(100% - 24px); } /* driving: no side buttons */
+.toast.at-bottom { bottom: calc(var(--safe-b) + 16px); max-width: calc(100% - 32px); } /* Projects screen */
 
 /* iPad / PC */
 @media (min-width: 700px) {
