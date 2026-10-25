@@ -62,15 +62,20 @@ body { position: fixed; inset: 0; overflow: hidden; }
    reported height plus whatever sits behind the status bar (safe-area top: 59 pt see-through, 0
    solid), never taller than the real screen (100lvh). Browser tabs: unchanged. (Same problem the
    owner's Terrain & Drainage tool solves with 100lvh.) */
+/* Both the page (html) and the fixed app layer (body) get the full height: iOS doesn't draw a
+   fixed layer below the bottom of a short page, which left the strip with only body stretched.
+   (Both "100%" here are the reported viewport height; overflow: hidden stops the extra scrolling.) */
 @media (display-mode: standalone) {
-  body { bottom: auto; height: calc(100% + env(safe-area-inset-top, 0px)); }
+  html, body { height: calc(100% + env(safe-area-inset-top, 0px)); overflow: hidden; }
+  body { bottom: auto; }
 }
-html.standalone body { bottom: auto; height: calc(100% + env(safe-area-inset-top, 0px)); }
+html.standalone, html.standalone body { height: calc(100% + env(safe-area-inset-top, 0px)); overflow: hidden; }
+html.standalone body { bottom: auto; }
 @supports (height: 100lvh) {
   @media (display-mode: standalone) {
-    body { height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
+    html, body { height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
   }
-  html.standalone body { height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
+  html.standalone, html.standalone body { height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px))); }
 }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
