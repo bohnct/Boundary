@@ -2,20 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#0f1108">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<!-- See-through status bar: the map runs under the clock. iOS then sizes the page short by the
-     status bar's height; html.standalone in app.css uses 100lvh to fill the real screen. -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Boundaries">
+<!-- Head order and values copied from the owner's Terrain & Drainage tool, whose home-screen app gets
+     the see-through status bar (map under the clock) on the same iPhone. theme-color is fixed: changing
+     it from script (as v17 did per Day/Night theme) left iOS drawing a solid bar in that colour. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Bohn Ag Boundaries</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Boundaries">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1108">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="css/app.css?v=17"><!-- ?v= keeps page, styles and script from the same version; bump with APP_VERSION -->
+<link rel="stylesheet" href="css/app.css?v=18"><!-- ?v= keeps page, styles and script from the same version; bump with APP_VERSION -->
 <script>/* home-screen app? */ if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) document.documentElement.classList.add('standalone');</script>
 <script>/* set the theme before first paint */ try { var t = (JSON.parse(localStorage.getItem('bab.prefs.v1')) || {}).theme || 'night'; document.documentElement.dataset.theme = t === 'day' || (t === 'auto' && !matchMedia('(prefers-color-scheme: dark)').matches) ? 'light' : 'dark'; } catch (e) { document.documentElement.dataset.theme = 'dark'; }</script>
 </head>
@@ -265,6 +266,6 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
-<script type="module" src="js/app.js?v=17"></script>
+<script type="module" src="js/app.js?v=18"></script>
 </body>
 </html>
